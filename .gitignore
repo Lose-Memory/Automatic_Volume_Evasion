@@ -1,0 +1,33 @@
+# ---- 构建产物 ----
+AutoVolume/bin/
+AutoVolume/obj/
+AutoVolume/publish/
+*.user
+*.suo
+.vs/
+
+# ---- 运行时文件（跟随 exe，不入库） ----
+AutoVolume/settings.json
+AutoVolume/settings.json.tmp
+AutoVolume/settings.json.bad
+AutoVolume/log.txt
+AutoVolume/log.txt.old
+
+# ---- 逆向分析中间产物（可由 Degath's Ducker.exe 重新导出） ----
+_analysis/
+
+# ---- 参考项目与样本（不纳入版本控制） ----
+Degath's Ducker/
+DesktopMixer/
+
+# ---- 本地工具与机器相关配置 ----
+node_modules/
+.claude/
+.mcp.json
+package.json
+package-lock.json
+
+# ---- 系统文件 ----
+Thumbs.db
+desktop.ini
+.DS_Store
