@@ -77,7 +77,7 @@
 
                         <TextBlock x:Name="TriggerHint" Style="{StaticResource Caption}" Margin="2,12,0,0"
                                    TextWrapping="Wrap"
-                                   Text="持续 = 电平需要连续超过阈值多久才算触发；保持 = 电平掉下去后继续维持触发多久才解除。" />
+                                   Text="麦克风按“是否被其他程序占用”触发（如豆包语音输入），与音量大小无关；视频按电平触发。持续 = 需要维持多久才算触发；保持 = 结束后继续维持多久才解除。" />
                     </StackPanel>
                 </Border>
 

@@ -16,7 +16,8 @@ public sealed class AppSnapshot
 
 public sealed class EngineSnapshot
 {
-    public float MicLevel { get; init; }
+    public bool MicInUse { get; init; }
+    public string? MicOwner { get; init; }
     public bool MicActive { get; init; }
     public float VideoLevel { get; init; }
     public bool VideoActive { get; init; }
@@ -36,6 +37,13 @@ public sealed class AudioEngine : IDisposable
     private const int TickMs = 50;
     private const float SilenceDb = -100f;
 
+    /// <summary>System processes that keep a capture session open but are not the user talking.</summary>
+    private static readonly string[] IgnoredCaptureProcesses =
+    [
+        "svchost", "audiodg", "system", "idle", "registry", "csrss", "winlogon",
+        "smss", "services", "lsass", "dwm", "explorer", "shellexperiencehost",
+    ];
+
     private readonly SettingsStore _store;
     private readonly object _lock = new();
     private readonly Dictionary<string, AppEntry> _apps = new(StringComparer.OrdinalIgnoreCase);
@@ -50,13 +58,11 @@ public sealed class AudioEngine : IDisposable
     private MMDeviceEnumerator? _enumerator;
     private List<MMDevice> _renderDevices = [];
     private MMDevice? _defaultCapture;
-    private WasapiCapture? _micCapture;
-    private float _micPeak;
+    private List<MMDevice> _captureDevices = [];
+    private string? _micOwner;
 
     private DateTime _lastSessionScan = DateTime.MinValue;
     private DateTime _lastDeviceScan = DateTime.MinValue;
-    private DateTime _micCaptureRetryAt = DateTime.MinValue;
-    private bool _reportedNoMic;
     private bool _deviceScanLogged;
 
     private readonly TriggerState _micState = new();
@@ -137,20 +143,20 @@ public sealed class AudioEngine : IDisposable
         if (now - _lastSessionScan >= TimeSpan.FromSeconds(1))
         {
             ScanSessions();
+            ScanCaptureSessions();
             _lastSessionScan = now;
         }
 
         ReadLevels();
-        UpdateMicCapture(settings, now);
 
-        var micDb = LinearToDb(_micPeak);
         var videoDb = LinearToDb(VideoLevel(settings));
 
         var micWasActive = _micState.Active;
         var videoWasActive = _videoState.Active;
-        Evaluate(_micState, settings.Mic, micDb, now);
+        Evaluate(_micState, settings.Mic, _micOwner != null ? 0f : SilenceDb, now);
         Evaluate(_videoState, settings.Video, videoDb, now);
-        if (micWasActive != _micState.Active) Log.Write($"麦克风触发: {(_micState.Active ? "开" : "关")} ({micDb:0} dB)");
+        if (micWasActive != _micState.Active)
+            Log.Write($"麦克风触发: {(_micState.Active ? "开" : "关")}（占用: {_micOwner ?? "无"}）");
         if (videoWasActive != _videoState.Active) Log.Write($"视频触发: {(_videoState.Active ? "开" : "关")} ({videoDb:0} dB)");
 
         RefreshMediaSessions(settings, now);
@@ -194,17 +200,17 @@ public sealed class AudioEngine : IDisposable
 
         if (now < _testPauseUntil)
         {
-            Publish(settings, micDb, videoDb);
+            Publish(settings, videoDb);
             return;
         }
 
         foreach (var target in settings.Targets)
         {
             var runtime = GetRuntime(target.Id);
-            ApplyTarget(target, runtime, settings, micDb, videoDb, elapsedMs);
+            ApplyTarget(target, runtime, settings, videoDb, elapsedMs);
         }
 
-        Publish(settings, micDb, videoDb);
+        Publish(settings, videoDb);
     }
 
     // ---- devices & sessions ----
@@ -234,14 +240,17 @@ public sealed class AudioEngine : IDisposable
                 ? _enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia)
                 : null;
 
+            foreach (var old in _captureDevices) old.Dispose();
+            _captureDevices = [];
+            foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
+                _captureDevices.Add(device);
+
             if (!_deviceScanLogged)
             {
                 _deviceScanLogged = true;
-                Log.Write($"设备扫描: 输出 {devices.Count} 个, 默认录音 = {_defaultCapture?.FriendlyName ?? "无"}, " +
-                          $"麦克风触发 = {_store.Settings.Mic.Enabled}");
+                Log.Write($"设备扫描: 输出 {devices.Count} 个, 录音 {_captureDevices.Count} 个, " +
+                          $"默认录音 = {_defaultCapture?.FriendlyName ?? "无"}");
             }
-
-            StopMicCapture();
         }
         catch (Exception ex)
         {
@@ -252,12 +261,18 @@ public sealed class AudioEngine : IDisposable
 
     private void ResetDevices()
     {
-        StopMicCapture();
         foreach (var device in _renderDevices)
         {
             try { device.Dispose(); } catch { }
         }
         _renderDevices = [];
+
+        foreach (var device in _captureDevices)
+        {
+            try { device.Dispose(); } catch { }
+        }
+        _captureDevices = [];
+
         _defaultCapture?.Dispose();
         _defaultCapture = null;
         _enumerator?.Dispose();
@@ -397,72 +412,59 @@ public sealed class AudioEngine : IDisposable
 
     // ---- mic ----
 
-    private void UpdateMicCapture(AppSettings settings, DateTime now)
+    /// <summary>
+    /// Detects microphone occupancy instead of level: a process that opens an active capture
+    /// session on any recording device counts as "using the mic" (voice input, calls, recording).
+    /// </summary>
+    private void ScanCaptureSessions()
     {
-        // Meter always runs so the UI shows a live level whether or not ducking is enabled.
-        if (_defaultCapture == null)
+        string? owner = null;
+
+        foreach (var device in _captureDevices)
         {
-            if (!_reportedNoMic)
+            SessionCollection sessions;
+            try
             {
-                _reportedNoMic = true;
-                Log.Write("未找到默认录音设备，麦克风电平不可用");
+                var manager = device.AudioSessionManager;
+                manager.RefreshSessions();
+                sessions = manager.Sessions;
             }
-            _micPeak = 0f;
-            StopMicCapture();
-            return;
-        }
-
-        if (_micCapture != null) return;
-        if (now < _micCaptureRetryAt) return;
-
-        try
-        {
-            _micCapture = new WasapiCapture(_defaultCapture);
-            _micCapture.DataAvailable += OnMicData;
-            _micCapture.RecordingStopped += (_, _) => { };
-            _micCapture.StartRecording();
-            Log.Write($"麦克风电平采集已启动: {_micCapture.WaveFormat}");
-        }
-        catch (Exception ex)
-        {
-            _micCaptureRetryAt = now.AddSeconds(5);
-            StopMicCapture();
-            _lastError = ex.Message;
-            Log.Write($"启动麦克风采集失败: {ex.Message}");
-        }
-    }
-
-    private void OnMicData(object? sender, WaveInEventArgs e)
-    {
-        try
-        {
-            var format = _micCapture?.WaveFormat;
-            if (format == null) return;
-
-            var peak = 0f;
-            if (format.Encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32)
+            catch
             {
-                for (var i = 0; i + 3 < e.BytesRecorded; i += 4)
-                    peak = MathF.Max(peak, MathF.Abs(BitConverter.ToSingle(e.Buffer, i)));
-            }
-            else if (format.BitsPerSample == 16)
-            {
-                for (var i = 0; i + 1 < e.BytesRecorded; i += 2)
-                    peak = MathF.Max(peak, MathF.Abs(BitConverter.ToInt16(e.Buffer, i) / 32768f));
+                continue;
             }
 
-            _micPeak = MathF.Max(peak, _micPeak * 0.5f);
-        }
-        catch { }
-    }
+            for (var i = 0; i < sessions.Count; i++)
+            {
+                try
+                {
+                    var session = sessions[i];
+                    if (session.IsSystemSoundsSession) continue;
 
-    private void StopMicCapture()
-    {
-        if (_micCapture == null) return;
-        try { _micCapture.StopRecording(); } catch { }
-        try { _micCapture.Dispose(); } catch { }
-        _micCapture = null;
-        _micPeak = 0f;
+                    var pid = (int)session.GetProcessID;
+                    if (pid == 0 || pid == Environment.ProcessId) continue;
+                    if (session.State != AudioSessionState.AudioSessionStateActive) continue;
+
+                    var name = ResolveProcessName(pid);
+                    if (name == null) continue;
+                    if (IgnoredCaptureProcesses.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+
+                    owner = name;
+                    break;
+                }
+                catch
+                {
+                    // Session vanished mid-scan.
+                }
+            }
+
+            if (owner != null) break;
+        }
+
+        if (owner == _micOwner) return;
+
+        _micOwner = owner;
+        Log.Write(owner == null ? "麦克风空闲" : $"麦克风被占用: {owner}");
     }
 
     // ---- triggers ----
@@ -520,7 +522,7 @@ public sealed class AudioEngine : IDisposable
     }
 
     private void ApplyTarget(TargetSettings target, TargetRuntime runtime, AppSettings settings,
-        float micDb, float videoDb, float elapsedMs)
+        float videoDb, float elapsedMs)
     {
         if (!settings.Enabled || !target.Enabled)
         {
@@ -608,6 +610,32 @@ public sealed class AudioEngine : IDisposable
         catch (Exception ex)
         {
             Log.Write($"  枚举录音设备失败: {ex.Message}");
+        }
+
+        Log.Write("=== 录音会话 ===");
+        foreach (var device in _captureDevices)
+        {
+            try
+            {
+                var manager = device.AudioSessionManager;
+                manager.RefreshSessions();
+                var sessions = manager.Sessions;
+                for (var i = 0; i < sessions.Count; i++)
+                {
+                    try
+                    {
+                        var session = sessions[i];
+                        var pid = (int)session.GetProcessID;
+                        var name = pid == 0 ? "system" : ResolveProcessName(pid) ?? $"PID {pid}";
+                        Log.Write($"  [{device.FriendlyName}] {name}: {session.State}");
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"  [{device.FriendlyName}] 枚举失败: {ex.Message}");
+            }
         }
 
         Log.Write("=== 会话转储 ===");
@@ -863,7 +891,7 @@ public sealed class AudioEngine : IDisposable
 
     // ---- snapshot ----
 
-    private void Publish(AppSettings settings, float micDb, float videoDb)
+    private void Publish(AppSettings settings, float videoDb)
     {
         var apps = new List<AppSnapshot>();
         foreach (var app in _apps.Values.OrderBy(a => a.Key))
@@ -903,7 +931,8 @@ public sealed class AudioEngine : IDisposable
 
         _snapshot = new EngineSnapshot
         {
-            MicLevel = micDb,
+            MicInUse = _micOwner != null,
+            MicOwner = _micOwner,
             MicActive = _micState.Active,
             VideoLevel = videoDb,
             VideoActive = _videoState.Active,

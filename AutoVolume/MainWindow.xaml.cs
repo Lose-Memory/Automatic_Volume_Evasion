@@ -68,11 +68,11 @@ public partial class MainWindow : Window
 
     private void BuildTriggers()
     {
-        _micMeter = BuildTriggerRow("麦克风", _store.Settings.Mic);
-        _videoMeter = BuildTriggerRow("视频播放", _store.Settings.Video);
+        _micMeter = BuildTriggerRow("麦克风", _store.Settings.Mic, isMic: true);
+        _videoMeter = BuildTriggerRow("视频播放", _store.Settings.Video, isMic: false);
     }
 
-    private MeterUi BuildTriggerRow(string title, TriggerSettings cfg)
+    private MeterUi BuildTriggerRow(string title, TriggerSettings cfg, bool isMic)
     {
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
@@ -100,8 +100,24 @@ public partial class MainWindow : Window
         Grid.SetColumn(cell, 1);
         grid.Children.Add(cell);
 
-        AddLabel(grid, "阈值 (dB)", 2);
-        AddBox(grid, NumberBox(cfg.ThresholdDb, -90, 0, v => { cfg.ThresholdDb = v; _store.SaveSoon(); }), 3);
+        if (isMic)
+        {
+            AddLabel(grid, "判定方式", 2);
+            var occupancy = new TextBlock
+            {
+                Text = "麦克风占用",
+                Style = (Style)FindResource("FieldLabel"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 18, 0),
+            };
+            Grid.SetColumn(occupancy, 3);
+            grid.Children.Add(occupancy);
+        }
+        else
+        {
+            AddLabel(grid, "阈值 (dB)", 2);
+            AddBox(grid, NumberBox(cfg.ThresholdDb, -90, 0, v => { cfg.ThresholdDb = v; _store.SaveSoon(); }), 3);
+        }
 
         AddLabel(grid, "持续 (ms)", 4);
         AddBox(grid, NumberBox(cfg.SustainMs, 0, 5000, v => { cfg.SustainMs = (int)v; _store.SaveSoon(); }), 5);
@@ -133,6 +149,9 @@ public partial class MainWindow : Window
             Margin = new Thickness(0, 0, 10, 0),
             FontSize = 12.5,
             Foreground = (Brush)FindResource("TextSecondaryBrush"),
+            MaxWidth = 120,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextAlignment = TextAlignment.Right,
         };
         DockPanel.SetDock(valueText, Dock.Right);
 
@@ -387,8 +406,8 @@ public partial class MainWindow : Window
             ? (Brush)FindResource("DangerBrush")
             : (Brush)FindResource("AccentBrush");
 
-        _micMeter.ValueText.Text = FormatDb(snapshot.MicLevel);
-        _micMeter.Bar.Value = LevelToBar(snapshot.MicLevel);
+        _micMeter.ValueText.Text = snapshot.MicInUse ? snapshot.MicOwner ?? "占用中" : "空闲";
+        _micMeter.Bar.Value = snapshot.MicInUse ? 1 : 0;
         _micMeter.Bar.Foreground = snapshot.MicActive ? ActiveBrush : MeterBrush;
 
         _videoMeter.ValueText.Text = FormatDb(snapshot.VideoLevel);
