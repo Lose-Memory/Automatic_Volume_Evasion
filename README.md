@@ -1,8 +1,10 @@
 # AutoVolume 音量自动闪避
 
-> Windows 上的按应用音量闪避工具：用麦克风时自动压低音乐，看视频时自动让音乐让路。
+![AutoVolume 设置界面](assets/screenshot.png)
 
-AutoVolume 常驻托盘，监听两件事——**谁在占用麦克风**、**谁在播放视频**——然后按你设定的比例降低目标应用的音量，或者直接暂停它。
+AutoVolume 是一个 Windows 托盘小工具：当它发现你**占用了麦克风**（语音输入、通话、录音）或**正在播放视频**时，会把音乐软件的音量自动压下去，或者干脆暂停；结束后再原样还回来。
+
+不装驱动、不接管声卡、不修改系统设置，只操作 Windows 自带的「按应用音量」。
 
 ## 它解决什么问题
 
@@ -12,7 +14,7 @@ AutoVolume 常驻托盘，监听两件事——**谁在占用麦克风**、**谁
 
 ## 功能
 
-- **麦克风占用触发**：任何非系统进程占用麦克风（语音输入、通话、录音）时触发，与说话音量无关，不会被音箱串音误触发。
+- **麦克风占用触发**：任何非系统进程占用麦克风时触发。按「谁占用了麦克风」判断，与说话音量无关，不会被音箱串音误触发。
 - **视频触发**：浏览器 / PotPlayer 有声音输出时触发。
 - **每个目标独立配置**：两条触发路径可以分别设为「不处理 / 压低音量 / 暂停播放」，压低比例单独可调。
 - **实时反馈**：界面里每个应用名下面有一条底色进度条，显示当前音量或电平。
@@ -83,6 +85,57 @@ AutoVolume 常驻托盘，监听两件事——**谁在占用麦克风**、**谁
 
 > 麦克风走的是「占用检测」，`Mic.ThresholdDb` 目前不参与判断，字段保留仅为兼容旧配置。
 
+## 项目结构
+
+```
+Automatic_Volume_Evasion/
+├── src/AutoVolume/          # 全部源码（C# + XAML）
+├── assets/                  # README 用图
+├── artifacts/               # 构建产物（git 忽略）
+├── Directory.Build.props    # 统一把 bin/obj/publish 输出到 artifacts/
+├── AutoVolume.slnx
+├── README.md
+└── LICENSE
+```
+
+## 从源码构建
+
+```powershell
+# 编译
+dotnet build AutoVolume.slnx -c Release
+
+# 发布单文件（框架依赖）
+dotnet publish src/AutoVolume/AutoVolume.csproj -c Release -r win-x64 `
+  --self-contained false -p:PublishSingleFile=true -p:DebugType=None -o artifacts/publish
+```
+
+产物为 `artifacts/publish/AutoVolume.exe`（约 26 MB，其中 25 MB 是 WinRT 投影库）。
+
+依赖：
+
+- [NAudio](https://github.com/naudio/NAudio) 2.2.1 — WASAPI 会话与电平
+- `Microsoft.Windows.SDK.NET.Ref` — GSMTC 媒体会话控制
+
+## 相关项目与致谢
+
+### Degath's Ducker（闭源）
+
+作者的站点是 `www.degathsducker.weebly.com`（写在程序内嵌字符串里），网上查不到公开仓库或源码；从 PDB 路径看，作者使用芬兰语环境开发。
+
+逆向它的可执行文件可以确认：.NET Framework 4.5 + WinForms 的单文件托盘程序，用 NAudio 的 WASAPI 会话接口逐应用调音量；支持把「麦克风」或「某个应用的音频会话」作为触发器、把应用会话作为目标；内置多套模板（`TemplateDictionary`）、三段式音量包络（attack / sustain / release）、峰值滤波器，以及键盘和手柄热键。
+
+它的致命问题是**配置保存有缺陷**：`SaveSettings()` 只在窗口移动、窗口尺寸变化、手动「保存」这几种情况下被调用，增删触发器/目标完全不落盘，于是配置完一重启就回到旧状态。这正是本项目启动的直接原因。
+
+### DesktopMixer（开源，无许可证）
+
+[github.com/CameronVigil/DesktopMixer](https://github.com/CameronVigil/DesktopMixer)，C# 编写的按应用音量混合器。
+
+架构是三层：ASP.NET Core 8 + NAudio 的后端（`AudioEngine` 每 50 ms 一个 tick）、Vue 3 前端、WebView2 桌面壳。闪避模型是「阈值 + 压低比例 + attack / hold / release」，按 exe 名聚合会话，设置用防抖 + 原子写持久化，退出前还原音量。
+
+本项目借鉴了它按 exe 名聚合会话、只在音量真正变化时才写入、退出前还原音量这几个做法；没有沿用它的三层架构——为了这个场景引入 Web 服务器和浏览器内核太重了。
+
+> DesktopMixer 仓库没有 LICENSE 文件，按「保留所有权利」处理。本项目没有复制它的代码，只参考了设计思路。
+
 ## 已知限制
 
 - 内置三个目标（酷狗、PotPlayer、浏览器）；增加其他应用需要编辑 `settings.json` 的 `Targets`。
@@ -90,24 +143,12 @@ AutoVolume 常驻托盘，监听两件事——**谁在占用麦克风**、**谁
 - 以管理员权限运行的应用，普通权限的 AutoVolume 无法控制。
 - 框架依赖版本需要目标机器安装 .NET 10 桌面运行时。
 
-## 从源码构建
-
-```powershell
-cd AutoVolume
-dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:DebugType=None -o publish
-```
-
-产物是单个 `publish\AutoVolume.exe`（约 26 MB，其中 25 MB 是 WinRT 投影库）。
-
-依赖：
-
-- [NAudio](https://github.com/naudio/NAudio) 2.2.1 — WASAPI 会话与电平
-- `Microsoft.Windows.SDK.NET.Ref` — GSMTC 媒体会话控制
-
 ## 许可证
 
 [MIT](LICENSE)
 
 ---
 
-<sub>English: A tray utility for Windows that ducks (or pauses) your music automatically while you use a microphone or play video, built on WASAPI session volumes. Requires the .NET 10 Desktop Runtime.</sub>
+<sub>English: A Windows tray utility that automatically ducks (or pauses) your music while you use a microphone or play video, built on WASAPI session volumes. Requires the .NET 10 Desktop Runtime.</sub>
+
+<sub>本项目的代码与文档由 AI 助手（Claude Code）辅助完成，作者负责需求、验证与审核。</sub>
