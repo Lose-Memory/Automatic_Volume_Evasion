@@ -1,7 +1,7 @@
 # ---- 构建产物 ----
 AutoVolume/bin/
 AutoVolume/obj/
-AutoVolume/publish/
+AutoVolume/publish*/
 *.user
 *.suo
 .vs/
@@ -12,6 +12,8 @@ AutoVolume/settings.json.tmp
 AutoVolume/settings.json.bad
 AutoVolume/log.txt
 AutoVolume/log.txt.old
+
+_portable-test/
 
 # ---- 逆向分析中间产物（可由 Degath's Ducker.exe 重新导出） ----
 _analysis/
