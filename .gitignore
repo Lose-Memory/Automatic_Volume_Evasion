@@ -1,18 +1,17 @@
 # ---- 构建产物 ----
-AutoVolume/bin/
-AutoVolume/obj/
-AutoVolume/publish*/
+artifacts/
+src/**/bin/
+src/**/obj/
 *.user
 *.suo
 .vs/
 
-# ---- 运行时文件（跟随 exe，不入库） ----
-AutoVolume/settings.json
-AutoVolume/settings.json.tmp
-AutoVolume/settings.json.bad
-AutoVolume/log.txt
-AutoVolume/log.txt.old
-
+# ---- 运行时文件（由 exe 在其所在目录生成） ----
+settings.json
+settings.json.tmp
+settings.json.bad
+log.txt
+log.txt.old
 _portable-test/
 
 # ---- 逆向分析中间产物（可由 Degath's Ducker.exe 重新导出） ----

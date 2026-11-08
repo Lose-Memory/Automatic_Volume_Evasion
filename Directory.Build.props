@@ -1,0 +1,9 @@
+<Project>
+
+  <!-- 所有构建产物统一输出到仓库根目录的 artifacts/，不污染源码目录。 -->
+  <PropertyGroup>
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
+  </PropertyGroup>
+
+</Project>
