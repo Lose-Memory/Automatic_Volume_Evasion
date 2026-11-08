@@ -82,6 +82,16 @@ public sealed class AppSettings
 
     public string[] VideoSourceProcesses { get; set; } = ["msedge", "chrome", "PotPlayerMini64", "PotPlayerMini"];
 
+    /// <summary>System processes that keep a capture session open but are not the user talking. Always ignored.</summary>
+    public static readonly string[] SystemIgnoredProcesses =
+    [
+        "svchost", "audiodg", "system", "idle", "registry", "csrss", "winlogon",
+        "smss", "services", "lsass", "dwm", "explorer", "shellexperiencehost",
+    ];
+
+    /// <summary>Extra processes the user chose to ignore. Shown in the settings window.</summary>
+    public string[] IgnoredCaptureProcesses { get; set; } = [];
+
     public HotkeySpec KuGouPauseHotkey { get; set; } = new() { Ctrl = true, Shift = true, Alt = true, Key = "F8" };
 
     public bool RunAtStartup { get; set; }
@@ -136,6 +146,7 @@ public sealed class AppSettings
         Targets ??= [];
         KuGouPauseHotkey ??= new HotkeySpec { Ctrl = true, Shift = true, Alt = true, Key = "F8" };
         VideoSourceProcesses ??= [];
+        IgnoredCaptureProcesses = CleanProcessNames(IgnoredCaptureProcesses);
         AppVolumes = new Dictionary<string, float>(AppVolumes ?? new(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var t in Targets)
@@ -156,6 +167,16 @@ public sealed class AppSettings
         Window.Width = Math.Clamp(Window.Width, 600, 8000);
         Window.Height = Math.Clamp(Window.Height, 400, 8000);
     }
+
+    /// <summary>Trims entries, drops a trailing ".exe" (Task Manager shows that form), and removes duplicates.</summary>
+    private static string[] CleanProcessNames(string[]? names) =>
+        (names ?? [])
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n.Trim())
+            .Select(n => n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? n[..^4] : n)
+            .Where(n => n.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 }
 
 /// <summary>settings.json next to the executable. Debounced atomic writes, written on exit.</summary>

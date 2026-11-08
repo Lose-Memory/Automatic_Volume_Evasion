@@ -37,13 +37,6 @@ public sealed class AudioEngine : IDisposable
     private const int TickMs = 50;
     private const float SilenceDb = -100f;
 
-    /// <summary>System processes that keep a capture session open but are not the user talking.</summary>
-    private static readonly string[] IgnoredCaptureProcesses =
-    [
-        "svchost", "audiodg", "system", "idle", "registry", "csrss", "winlogon",
-        "smss", "services", "lsass", "dwm", "explorer", "shellexperiencehost",
-    ];
-
     private readonly SettingsStore _store;
     private readonly object _lock = new();
     private readonly Dictionary<string, AppEntry> _apps = new(StringComparer.OrdinalIgnoreCase);
@@ -143,7 +136,7 @@ public sealed class AudioEngine : IDisposable
         if (now - _lastSessionScan >= TimeSpan.FromSeconds(1))
         {
             ScanSessions();
-            ScanCaptureSessions();
+            ScanCaptureSessions(settings);
             _lastSessionScan = now;
         }
 
@@ -377,6 +370,22 @@ public sealed class AudioEngine : IDisposable
     private static string Normalize(string name) =>
         name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
 
+    private static bool IsIgnoredCapture(string processName, string[] userIgnored)
+    {
+        var key = Normalize(processName.Trim());
+        return MatchesAny(key, AppSettings.SystemIgnoredProcesses) || MatchesAny(key, userIgnored);
+    }
+
+    private static bool MatchesAny(string key, string[] names)
+    {
+        foreach (var entry in names)
+        {
+            if (string.Equals(Normalize(entry.Trim()), key, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
     // ---- levels ----
 
     private void ReadLevels()
@@ -416,7 +425,7 @@ public sealed class AudioEngine : IDisposable
     /// Detects microphone occupancy instead of level: a process that opens an active capture
     /// session on any recording device counts as "using the mic" (voice input, calls, recording).
     /// </summary>
-    private void ScanCaptureSessions()
+    private void ScanCaptureSessions(AppSettings settings)
     {
         string? owner = null;
 
@@ -447,7 +456,7 @@ public sealed class AudioEngine : IDisposable
 
                     var name = ResolveProcessName(pid);
                     if (name == null) continue;
-                    if (IgnoredCaptureProcesses.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+                    if (IsIgnoredCapture(name, settings.IgnoredCaptureProcesses)) continue;
 
                     owner = name;
                     break;

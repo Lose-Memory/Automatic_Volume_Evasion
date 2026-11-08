@@ -19,6 +19,7 @@ AutoVolume 是一个 Windows 托盘小工具：当它发现你**占用了麦克�
 ## 功能
 
 - **麦克风占用触发**：任何非系统进程占用麦克风时触发。按「谁占用了麦克风」判断，与说话音量无关，不会被音箱串音误触发。
+- **自定义忽略列表**：界面底部可添加进程名（如语音输入工具），这些程序占用麦克风时不触发闪避；内置系统进程始终被忽略，默认不显示在列表中。
 - **视频触发**：浏览器 / PotPlayer 有声音输出时触发。
 - **每个目标独立配置**：两条触发路径可以分别设为「不处理 / 压低音量 / 暂停播放」，压低比例单独可调。
 - **实时反馈**：界面里每个应用名下面有一条底色进度条，显示当前音量或电平。
@@ -80,6 +81,7 @@ AutoVolume 是一个 Windows 托盘小工具：当它发现你**占用了麦克�
   "Mic":   { "Enabled": true,  "ThresholdDb": -45, "SustainMs": 200, "HoldMs": 400 },
   "Video": { "Enabled": true,  "ThresholdDb": -50, "SustainMs": 300, "HoldMs": 400 },
   "VideoSourceProcesses": ["msedge", "chrome", "PotPlayerMini64", "PotPlayerMini"],
+  "IgnoredCaptureProcesses": ["ImeService"],
   "KuGouPauseHotkey": { "Ctrl": true, "Shift": true, "Alt": true, "Key": "F8" },
   "Enabled": true,
   "RefreshMs": 1000,
@@ -90,6 +92,8 @@ AutoVolume 是一个 Windows 托盘小工具：当它发现你**占用了麦克�
 ```
 
 `Targets` 里的每一项对应界面中的一行，可以手动增删进程名来支持更多应用。
+
+`IgnoredCaptureProcesses` 是用户在界面中添加的忽略项；`svchost`、`audiodg` 等内置系统进程写死在程序里，始终被忽略，不会出现在配置文件中。
 
 > 麦克风走的是「占用检测」，`Mic.ThresholdDb` 目前不参与判断，字段保留仅为兼容旧配置。
 
@@ -153,7 +157,7 @@ dotnet publish src/AutoVolume.csproj -c Release -r win-x64 `
 
 **麦克风一直显示被占用？**
 
-通常是有语音类软件（会议、录音、语音助手）长期占着录音设备。`log.txt` 里会记录占用者的进程名，关掉对应软件即可。
+通常是有语音类软件（会议、录音、语音助手）长期占着录音设备。`log.txt` 里会记录占用者的进程名，关掉对应软件即可；如果希望它一直占用又不触发闪避，把它的进程名加到界面底部的「忽略的麦克风占用」里。
 
 **酷狗暂停不生效？**
 
@@ -179,6 +183,11 @@ dotnet publish src/AutoVolume.csproj -c Release -r win-x64 `
 - 框架依赖版本需要目标机器安装 .NET 10 桌面运行时。
 
 ## 更新日志
+
+### 未发布
+
+- 新增「忽略的麦克风占用」列表，可自定义哪些程序占用麦克风时不触发闪避
+- 内置系统进程始终忽略，默认隐藏，可用开关查看
 
 ### v1.1.0
 

@@ -89,6 +89,31 @@
                 <Border Style="{StaticResource Card}" Margin="0,0,0,8">
                     <StackPanel x:Name="TargetPanel" />
                 </Border>
+
+                <TextBlock Text="忽略的麦克风占用" Style="{StaticResource SectionTitle}" Margin="2,8,0,10" />
+                <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="IgnoredBox" Style="{StaticResource ProcessBox}"
+                                     VerticalAlignment="Center" />
+                            <CheckBox x:Name="ShowSystemIgnored" Grid.Column="2" Style="{StaticResource Switch}"
+                                      Content="显示内置系统进程" FontSize="13.5" Margin="0,0,16,0"
+                                      VerticalAlignment="Center"
+                                      Checked="ShowSystemIgnored_Changed" Unchecked="ShowSystemIgnored_Changed" />
+                            <Button Grid.Column="3" Content="添加" Style="{StaticResource GhostButton}"
+                                    Click="AddIgnored_Click" />
+                        </Grid>
+                        <TextBlock Style="{StaticResource Caption}" Margin="0,10,0,0"
+                                   Text="列出的程序占用麦克风时不会触发闪避。进程名可在任务管理器「详细信息」页查看，填 KuGou 或 KuGou.exe 均可。内置系统进程始终会被忽略，可用开关查看。" />
+                        <WrapPanel x:Name="IgnoredPanel" Margin="0,12,0,0" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
 

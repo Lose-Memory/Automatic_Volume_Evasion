@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private readonly AudioEngine _engine;
     private readonly DispatcherTimer _timer;
     private readonly Dictionary<string, TargetUi> _targets = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<string> _ignored = [];
     private MeterUi _micMeter = null!;
     private MeterUi _videoMeter = null!;
     private bool _loading = false;
@@ -58,8 +59,12 @@ public partial class MainWindow : Window
         RefreshBox.LostFocus += (_, _) => CommitRefresh();
         RefreshBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) CommitRefresh(); };
 
+        IgnoredBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) AddIgnored(); };
+
         BuildTriggers();
         BuildTargets();
+        _ignored.AddRange(store.Settings.IgnoredCaptureProcesses);
+        RenderIgnored();
 
         ContentRendered += (_, _) =>
         {
@@ -394,6 +399,103 @@ public partial class MainWindow : Window
         if (!_targets.TryGetValue(target.Id, out var ui)) return;
         ui.MicPercent.IsEnabled = target.OnMic == TargetAction.Duck;
         ui.VideoPercent.IsEnabled = target.OnVideo == TargetAction.Duck;
+    }
+
+    // ---- ignored capture processes ----
+
+    private void AddIgnored_Click(object sender, RoutedEventArgs e) => AddIgnored();
+
+    private void AddIgnored()
+    {
+        var name = IgnoredBox.Text.Trim();
+        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
+        IgnoredBox.Clear();
+        if (name.Length == 0) return;
+        if (_ignored.Contains(name, StringComparer.OrdinalIgnoreCase)) return;
+
+        _ignored.Add(name);
+        SaveIgnored();
+        RenderIgnored();
+        Log.Write($"忽略的麦克风占用: 新增 {name}");
+    }
+
+    private void SaveIgnored()
+    {
+        _store.Settings.IgnoredCaptureProcesses = _ignored.ToArray();
+        _store.SaveSoon();
+    }
+
+    private void ShowSystemIgnored_Changed(object sender, RoutedEventArgs e) => RenderIgnored();
+
+    private void RenderIgnored()
+    {
+        IgnoredPanel.Children.Clear();
+
+        if (ShowSystemIgnored.IsChecked == true)
+        {
+            foreach (var name in AppSettings.SystemIgnoredProcesses)
+                IgnoredPanel.Children.Add(BuildChip(name, removable: false));
+        }
+
+        foreach (var name in _ignored)
+            IgnoredPanel.Children.Add(BuildChip(name, removable: true));
+
+        if (_ignored.Count == 0 && ShowSystemIgnored.IsChecked != true)
+        {
+            var hint = new TextBlock
+            {
+                Text = "还没有自定义忽略的进程，输入进程名后点「添加」。",
+                FontSize = 13.5,
+            };
+            hint.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+            IgnoredPanel.Children.Add(hint);
+        }
+    }
+
+    private Border BuildChip(string name, bool removable)
+    {
+        var chip = new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            Padding = removable ? new Thickness(12, 5, 5, 5) : new Thickness(12, 5, 12, 5),
+            Margin = new Thickness(0, 0, 8, 8),
+        };
+        chip.SetResourceReference(Border.BackgroundProperty, "ChipBrush");
+        chip.SetResourceReference(Border.BorderBrushProperty, "StrokeBrush");
+        if (!removable) chip.ToolTip = "内置系统进程，始终被忽略";
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var label = new TextBlock
+        {
+            Text = name,
+            FontSize = 13.5,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        label.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimaryBrush");
+        row.Children.Add(label);
+
+        if (removable)
+        {
+            var remove = new Button
+            {
+                Content = "×",
+                Style = (Style)FindResource("ChipButton"),
+                Margin = new Thickness(7, 0, 0, 0),
+                ToolTip = "从忽略列表移除",
+            };
+            remove.Click += (_, _) =>
+            {
+                _ignored.Remove(name);
+                SaveIgnored();
+                RenderIgnored();
+                Log.Write($"忽略的麦克风占用: 移除 {name}");
+            };
+            row.Children.Add(remove);
+        }
+
+        chip.Child = row;
+        return chip;
     }
 
     // ---- refresh ----
