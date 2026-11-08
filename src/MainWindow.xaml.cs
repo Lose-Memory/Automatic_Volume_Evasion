@@ -45,6 +45,7 @@ public partial class MainWindow : Window
         _store = store;
         _engine = engine;
         InitializeComponent();
+        VersionText.Text = $"v{typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "?"}";
         Icon = AppIcon.CreateImageSource(64);
         ApplyTheme();
         RestorePlacement();
