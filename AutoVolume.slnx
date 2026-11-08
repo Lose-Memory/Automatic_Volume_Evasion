@@ -1,5 +1,5 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/AutoVolume/AutoVolume.csproj" />
+    <Project Path="src/AutoVolume.csproj" />
   </Folder>
 </Solution>

@@ -89,7 +89,7 @@ AutoVolume 是一个 Windows 托盘小工具：当它发现你**占用了麦克�
 
 ```
 Automatic_Volume_Evasion/
-├── src/AutoVolume/          # 全部源码（C# + XAML）
+├── src/                     # 全部源码（C# + XAML）
 ├── assets/                  # README 用图
 ├── artifacts/               # 构建产物（git 忽略）
 ├── Directory.Build.props    # 统一把 bin/obj/publish 输出到 artifacts/
@@ -105,7 +105,7 @@ Automatic_Volume_Evasion/
 dotnet build AutoVolume.slnx -c Release
 
 # 发布单文件（框架依赖）
-dotnet publish src/AutoVolume/AutoVolume.csproj -c Release -r win-x64 `
+dotnet publish src/AutoVolume.csproj -c Release -r win-x64 `
   --self-contained false -p:PublishSingleFile=true -p:DebugType=None -o artifacts/publish
 ```
 
