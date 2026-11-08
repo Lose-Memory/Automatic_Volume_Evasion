@@ -1,6 +1,8 @@
 # AutoVolume 音量自动闪避
 
-![AutoVolume 设置界面](assets/screenshot.png)
+![AutoVolume 浅色界面](assets/screenshot-light.png)
+
+![AutoVolume 深色界面](assets/screenshot-dark.png)
 
 AutoVolume 是一个 Windows 托盘小工具：当它发现你**占用了麦克风**（语音输入、通话、录音）或**正在播放视频**时，会把音乐软件的音量自动压下去，或者干脆暂停；结束后再原样还回来。
 
@@ -19,7 +21,8 @@ AutoVolume 是一个 Windows 托盘小工具：当它发现你**占用了麦克�
 - **每个目标独立配置**：两条触发路径可以分别设为「不处理 / 压低音量 / 暂停播放」，压低比例单独可调。
 - **实时反馈**：界面里每个应用名下面有一条底色进度条，显示当前音量或电平。
 - **自动恢复**：触发结束、关闭程序、甚至程序被强杀后重新启动，都会把音量还原。
-- **深色模式**：右上角一键切换浅色 / 深色，选择会写入配置。
+- **深色模式**：右上角一键切换浅色 / 深色，标题栏、滚动条、进度条一并跟随，选择写入配置。
+- **记住窗口**：退出时保存窗口大小与位置，下次在原处打开。
 - **便携**：程序是单个 exe，配置 `settings.json` 和日志 `log.txt` 都写在 exe 同级目录。
 
 ## 工作原理
@@ -79,6 +82,7 @@ AutoVolume 是一个 Windows 托盘小工具：当它发现你**占用了麦克�
   "Enabled": true,
   "RefreshMs": 1000,
   "Theme": "Light",
+  "Window": { "Width": 1020, "Height": 720, "Left": 300, "Top": 160, "HasPosition": true }, 
   "Targets": [ /* 目标列表：进程名、触发动作、压低比例 */ ]
 }
 ```

@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -26,6 +28,9 @@ public partial class MainWindow : Window
         public required ProgressBar Bar { get; init; }
     }
 
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
     private readonly SettingsStore _store;
     private readonly AudioEngine _engine;
     private readonly DispatcherTimer _timer;
@@ -41,6 +46,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         Icon = AppIcon.CreateImageSource(64);
         ApplyTheme();
+        RestorePlacement();
+        SourceInitialized += (_, _) => ApplyTitleBarTheme();
 
         PathText.Text = $"配置：{store.FilePath}";
         HotkeyBox.Text = store.Settings.KuGouPauseHotkey.ToString();
@@ -452,6 +459,76 @@ public partial class MainWindow : Window
             Resources.MergedDictionaries[0] = new ResourceDictionary { Source = new Uri(source, UriKind.Relative) };
 
         ThemeButton.Content = _store.Settings.Theme == "Dark" ? "浅色模式" : "深色模式";
+        ApplyTitleBarTheme();
+    }
+
+    /// <summary>Windows draws the caption itself; DWM's immersive-dark-mode flag is the only way to darken it.</summary>
+    private void ApplyTitleBarTheme()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero) return;
+
+        var dark = _store.Settings.Theme == "Dark" ? 1 : 0;
+        // 20 = DWMWA_USE_IMMERSIVE_DARK_MODE (Win10 2004+), 19 = the 1809-1909 attribute id
+        if (DwmSetWindowAttribute(handle, 20, ref dark, sizeof(int)) != 0)
+            DwmSetWindowAttribute(handle, 19, ref dark, sizeof(int));
+    }
+
+    private void RestorePlacement()
+    {
+        var placement = _store.Settings.Window;
+
+        if (placement.Width >= 600 && placement.Height >= 400)
+        {
+            Width = placement.Width;
+            Height = placement.Height;
+        }
+
+        if (placement.HasPosition && IsPlacementVisible(placement.Left, placement.Top, placement.Width, placement.Height))
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Left = placement.Left;
+            Top = placement.Top;
+        }
+        else
+        {
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+
+        if (placement.Maximized) WindowState = WindowState.Maximized;
+
+        Log.Write($"恢复窗口: hasPos={placement.HasPosition} pos=({placement.Left},{placement.Top}) " +
+                  $"size={placement.Width}x{placement.Height} visible={IsPlacementVisible(placement.Left, placement.Top, placement.Width, placement.Height)} " +
+                  $"startup={WindowStartupLocation}");
+    }
+
+    private void SavePlacement()
+    {
+        var bounds = WindowState == WindowState.Normal
+            ? new Rect(Left, Top, ActualWidth, ActualHeight)
+            : RestoreBounds;
+
+        if (bounds.Width < 200 || bounds.Height < 200) return;
+
+        var placement = _store.Settings.Window;
+        placement.Width = bounds.Width;
+        placement.Height = bounds.Height;
+        placement.Left = bounds.Left;
+        placement.Top = bounds.Top;
+        placement.HasPosition = true;
+        placement.Maximized = WindowState == WindowState.Maximized;
+        _store.SaveSoon();
+        Log.Write($"保存窗口: pos=({bounds.Left:0},{bounds.Top:0}) size={bounds.Width:0}x{bounds.Height:0} state={WindowState}");
+    }
+
+    private static bool IsPlacementVisible(double left, double top, double width, double height)
+    {
+        var vl = SystemParameters.VirtualScreenLeft;
+        var vt = SystemParameters.VirtualScreenTop;
+        var vw = SystemParameters.VirtualScreenWidth;
+        var vh = SystemParameters.VirtualScreenHeight;
+
+        return left + width > vl && left < vl + vw && top + height > vt && top < vt + vh;
     }
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
@@ -534,6 +611,7 @@ public partial class MainWindow : Window
     {
         if (!_closing)
         {
+            SavePlacement();
             e.Cancel = true;
             Hide();
             return;
@@ -546,6 +624,7 @@ public partial class MainWindow : Window
 
     public void CloseForExit()
     {
+        SavePlacement();
         _closing = true;
         _timer.Stop();
         Close();

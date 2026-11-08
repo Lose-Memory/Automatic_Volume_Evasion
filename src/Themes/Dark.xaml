@@ -26,6 +26,9 @@
     <SolidColorBrush x:Key="DisabledSurfaceBrush" Color="#2E2E2E" />
     <SolidColorBrush x:Key="DisabledTextBrush" Color="#7A7A7A" />
 
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#5A5A5A" />
+    <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#7A7A7A" />
+
     <SolidColorBrush x:Key="PillRunningBrush" Color="#1F3A22" />
     <SolidColorBrush x:Key="PillStoppedBrush" Color="#333333" />
 

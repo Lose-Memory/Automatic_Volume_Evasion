@@ -63,6 +63,16 @@ public sealed class TargetSettings
     public PauseMethod PauseMethod { get; set; } = PauseMethod.MediaSession;
 }
 
+public sealed class WindowPlacement
+{
+    public double Width { get; set; } = 1020;
+    public double Height { get; set; } = 720;
+    public double Left { get; set; } = -1;
+    public double Top { get; set; } = -1;
+    public bool HasPosition { get; set; }
+    public bool Maximized { get; set; }
+}
+
 public sealed class AppSettings
 {
     public int Version { get; set; } = 1;
@@ -82,6 +92,9 @@ public sealed class AppSettings
 
     /// <summary>Window colour scheme: "Light" or "Dark".</summary>
     public string Theme { get; set; } = "Light";
+
+    /// <summary>Last window size and position.</summary>
+    public WindowPlacement Window { get; set; } = new();
 
     /// <summary>Last volume the user chose per app (process name). Used to undo a duck left behind by a crash.</summary>
     public Dictionary<string, float> AppVolumes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -139,6 +152,9 @@ public sealed class AppSettings
         Video.ThresholdDb = Math.Clamp(Video.ThresholdDb, -90, 0);
         RefreshMs = Math.Clamp(RefreshMs, 100, 5000);
         Theme = string.Equals(Theme, "Dark", StringComparison.OrdinalIgnoreCase) ? "Dark" : "Light";
+        Window ??= new WindowPlacement();
+        Window.Width = Math.Clamp(Window.Width, 600, 8000);
+        Window.Height = Math.Clamp(Window.Height, 400, 8000);
     }
 }
 
