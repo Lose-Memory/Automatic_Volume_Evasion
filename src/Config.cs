@@ -80,6 +80,9 @@ public sealed class AppSettings
     /// <summary>How often the window redraws the level bars, in milliseconds.</summary>
     public int RefreshMs { get; set; } = 1000;
 
+    /// <summary>Window colour scheme: "Light" or "Dark".</summary>
+    public string Theme { get; set; } = "Light";
+
     /// <summary>Last volume the user chose per app (process name). Used to undo a duck left behind by a crash.</summary>
     public Dictionary<string, float> AppVolumes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -135,6 +138,7 @@ public sealed class AppSettings
         Mic.ThresholdDb = Math.Clamp(Mic.ThresholdDb, -90, 0);
         Video.ThresholdDb = Math.Clamp(Video.ThresholdDb, -90, 0);
         RefreshMs = Math.Clamp(RefreshMs, 100, 5000);
+        Theme = string.Equals(Theme, "Dark", StringComparison.OrdinalIgnoreCase) ? "Dark" : "Light";
     }
 }
 

@@ -26,10 +26,6 @@ public partial class MainWindow : Window
         public required ProgressBar Bar { get; init; }
     }
 
-    private static readonly Brush MeterBrush = new SolidColorBrush(Color.FromRgb(0xCF, 0xE3, 0xF7));
-    private static readonly Brush ActiveBrush = new SolidColorBrush(Color.FromRgb(0xCD, 0xEB, 0xCF));
-    private static readonly Brush IdleBrush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
-
     private readonly SettingsStore _store;
     private readonly AudioEngine _engine;
     private readonly DispatcherTimer _timer;
@@ -44,6 +40,7 @@ public partial class MainWindow : Window
         _engine = engine;
         InitializeComponent();
         Icon = AppIcon.CreateImageSource(64);
+        ApplyTheme();
 
         PathText.Text = $"配置：{store.FilePath}";
         HotkeyBox.Text = store.Settings.KuGouPauseHotkey.ToString();
@@ -56,6 +53,12 @@ public partial class MainWindow : Window
 
         BuildTriggers();
         BuildTargets();
+
+        ContentRendered += (_, _) =>
+        {
+            RootScroll.ScrollToTop();
+            Dispatcher.BeginInvoke(new Action(() => RootScroll.ScrollToTop()), DispatcherPriority.Background);
+        };
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(store.Settings.RefreshMs) };
         _timer.Tick += (_, _) => Refresh();
@@ -148,11 +151,11 @@ public partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 10, 0),
             FontSize = 12.5,
-            Foreground = (Brush)FindResource("TextSecondaryBrush"),
             MaxWidth = 120,
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextAlignment = TextAlignment.Right,
         };
+        valueText.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
         DockPanel.SetDock(valueText, Dock.Right);
 
         var caption = new TextBlock
@@ -161,8 +164,8 @@ public partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 0, 6, 0),
             FontSize = 14,
-            Foreground = (Brush)FindResource("TextPrimaryBrush"),
         };
+        caption.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimaryBrush");
 
         dock.Children.Add(valueText);
         dock.Children.Add(caption);
@@ -394,12 +397,8 @@ public partial class MainWindow : Window
 
         var enabled = _store.Settings.Enabled;
         RunPillText.Text = enabled ? "● 运行中" : "○ 已停止";
-        RunPill.Background = enabled
-            ? new SolidColorBrush(Color.FromRgb(0xE6, 0xF4, 0xEA))
-            : new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
-        RunPillText.Foreground = enabled
-            ? (Brush)FindResource("SuccessBrush")
-            : (Brush)FindResource("TextSecondaryBrush");
+        RunPill.Background = (Brush)FindResource(enabled ? "PillRunningBrush" : "PillStoppedBrush");
+        RunPillText.Foreground = (Brush)FindResource(enabled ? "SuccessBrush" : "TextSecondaryBrush");
 
         ToggleButton.Content = enabled ? "停止闪避" : "开始闪避";
         ToggleButton.Background = enabled
@@ -408,11 +407,11 @@ public partial class MainWindow : Window
 
         _micMeter.ValueText.Text = snapshot.MicInUse ? snapshot.MicOwner ?? "占用中" : "空闲";
         _micMeter.Bar.Value = snapshot.MicInUse ? 1 : 0;
-        _micMeter.Bar.Foreground = snapshot.MicActive ? ActiveBrush : MeterBrush;
+        _micMeter.Bar.Foreground = (Brush)FindResource(snapshot.MicActive ? "MeterActiveBrush" : "MeterBrush");
 
         _videoMeter.ValueText.Text = FormatDb(snapshot.VideoLevel);
         _videoMeter.Bar.Value = LevelToBar(snapshot.VideoLevel);
-        _videoMeter.Bar.Foreground = snapshot.VideoActive ? ActiveBrush : MeterBrush;
+        _videoMeter.Bar.Foreground = (Brush)FindResource(snapshot.VideoActive ? "MeterActiveBrush" : "MeterBrush");
 
         foreach (var (id, ui) in _targets)
         {
@@ -422,9 +421,8 @@ public partial class MainWindow : Window
 
             var state = snapshot.TargetStates.TryGetValue(id, out var s) ? s : "—";
             ui.State.Text = state;
-            ui.VolumeBar.Foreground = state.Contains("暂停") || state.Contains("禁用")
-                ? IdleBrush
-                : MeterBrush;
+            ui.VolumeBar.Foreground = (Brush)FindResource(
+                state.Contains("暂停") || state.Contains("禁用") ? "MeterIdleBrush" : "MeterBrush");
         }
     }
 
@@ -436,6 +434,24 @@ public partial class MainWindow : Window
         _store.SaveSoon();
         Log.Write($"闪避总开关: {(_store.Settings.Enabled ? "开" : "关")}");
         Refresh();
+    }
+
+    private void ThemeButton_Click(object sender, RoutedEventArgs e)
+    {
+        _store.Settings.Theme = _store.Settings.Theme == "Dark" ? "Light" : "Dark";
+        _store.SaveSoon();
+        ApplyTheme();
+        Refresh();
+        Log.Write($"界面主题: {_store.Settings.Theme}");
+    }
+
+    private void ApplyTheme()
+    {
+        var source = _store.Settings.Theme == "Dark" ? "Themes/Dark.xaml" : "Themes/Light.xaml";
+        if (Resources.MergedDictionaries.Count > 0)
+            Resources.MergedDictionaries[0] = new ResourceDictionary { Source = new Uri(source, UriKind.Relative) };
+
+        ThemeButton.Content = _store.Settings.Theme == "Dark" ? "浅色模式" : "深色模式";
     }
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)

@@ -4,7 +4,8 @@
         Title="AutoVolume 音量闪避"
         Width="1020" Height="720" MinWidth="940" MinHeight="560"
         WindowStartupLocation="CenterScreen"
-        Background="#F3F3F3"
+        Background="{DynamicResource WindowBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
         FontFamily="Microsoft YaHei UI" FontSize="15"
         TextOptions.TextFormattingMode="Display"
         UseLayoutRounding="True"
@@ -13,6 +14,7 @@
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Light.xaml" />
                 <ResourceDictionary Source="Theme.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
@@ -26,7 +28,7 @@
         </Grid.RowDefinitions>
 
         <!-- header -->
-        <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource StrokeBrush}"
+        <Border Grid.Row="0" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}"
                 BorderThickness="0,0,0,1" Padding="24,18">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -37,6 +39,8 @@
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button x:Name="ThemeButton" Style="{StaticResource GhostButton}" Margin="0,0,12,0"
+                            Click="ThemeButton_Click" />
                     <Border x:Name="RunPill" Style="{StaticResource Pill}" Margin="0,0,14,0" VerticalAlignment="Center">
                         <TextBlock x:Name="RunPillText" FontSize="13.5" VerticalAlignment="Center"
                                    Foreground="{StaticResource AccentBrush}" />
@@ -48,7 +52,7 @@
         </Border>
 
         <!-- content -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="20,18,20,10">
+        <ScrollViewer x:Name="RootScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="20,18,20,10">
             <StackPanel>
 
                 <TextBlock Text="触发源" Style="{StaticResource SectionTitle}" />
@@ -56,7 +60,7 @@
                     <StackPanel>
                         <StackPanel x:Name="TriggerPanel" />
 
-                        <Border Background="#FAFAFA" CornerRadius="8" Padding="14,10" Margin="0,8,0,0">
+                        <Border Background="{DynamicResource ChipBrush}" CornerRadius="8" Padding="14,10" Margin="0,8,0,0">
                             <DockPanel>
                                 <TextBlock Text="酷狗暂停热键" Style="{StaticResource FieldLabel}" DockPanel.Dock="Left" />
                                 <TextBox x:Name="HotkeyBox" Style="{StaticResource NumberBox}" Width="180"
@@ -64,7 +68,7 @@
                             </DockPanel>
                         </Border>
 
-                        <Border Background="#FAFAFA" CornerRadius="8" Padding="14,10" Margin="0,8,0,0">
+                        <Border Background="{DynamicResource ChipBrush}" CornerRadius="8" Padding="14,10" Margin="0,8,0,0">
                             <DockPanel>
                                 <TextBlock Text="电平刷新间隔" Style="{StaticResource FieldLabel}" DockPanel.Dock="Left" />
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -89,7 +93,7 @@
         </ScrollViewer>
 
         <!-- footer -->
-        <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource StrokeBrush}"
+        <Border Grid.Row="2" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}"
                 BorderThickness="0,1,0,0" Padding="24,12">
             <Grid>
                 <TextBlock x:Name="PathText" VerticalAlignment="Center" Style="{StaticResource Caption}"
