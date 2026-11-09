@@ -19,13 +19,7 @@ public partial class MainWindow : Window
         public required TextBox VideoPercent { get; init; }
         public required TextBlock State { get; init; }
         public required TextBlock VolumeText { get; init; }
-        public required ProgressBar VolumeBar { get; init; }
-    }
-
-    private sealed class MeterUi
-    {
-        public required TextBlock ValueText { get; init; }
-        public required ProgressBar Bar { get; init; }
+        public required SegmentedMeter VolumeMeter { get; init; }
     }
 
     [DllImport("dwmapi.dll")]
@@ -36,9 +30,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _timer;
     private readonly Dictionary<string, TargetUi> _targets = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _ignored = [];
-    private MeterUi _micMeter = null!;
-    private MeterUi _videoMeter = null!;
     private bool _loading = false;
+    private bool? _toggleEnabled;
 
     public MainWindow(SettingsStore store, AudioEngine engine)
     {
@@ -70,7 +63,7 @@ public partial class MainWindow : Window
         ContentRendered += (_, _) =>
         {
             RootScroll.ScrollToTop();
-            Dispatcher.BeginInvoke(new Action(() => RootScroll.ScrollToTop()), DispatcherPriority.Background);
+            Dispatcher.BeginInvoke(new Action(() => RootScroll.ScrollToTop()), DispatcherPriority.ApplicationIdle);
         };
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(store.Settings.RefreshMs) };
@@ -84,147 +77,71 @@ public partial class MainWindow : Window
 
     private void BuildTriggers()
     {
-        _micMeter = BuildTriggerRow("麦克风", _store.Settings.Mic, isMic: true);
-        _videoMeter = BuildTriggerRow("视频播放", _store.Settings.Video, isMic: false);
+        var mic = _store.Settings.Mic;
+        var video = _store.Settings.Video;
+
+        MicSwitch.IsChecked = mic.Enabled;
+        MicSwitch.Checked += (_, _) => { if (!_loading) { mic.Enabled = true; _store.SaveSoon(); } };
+        MicSwitch.Unchecked += (_, _) => { if (!_loading) { mic.Enabled = false; _store.SaveSoon(); } };
+        BindNumber(MicSustainBox, mic.SustainMs, 0, 5000, v => { mic.SustainMs = (int)v; _store.SaveSoon(); });
+        BindNumber(MicHoldBox, mic.HoldMs, 0, 5000, v => { mic.HoldMs = (int)v; _store.SaveSoon(); });
+
+        VideoSwitch.IsChecked = video.Enabled;
+        VideoSwitch.Checked += (_, _) => { if (!_loading) { video.Enabled = true; _store.SaveSoon(); } };
+        VideoSwitch.Unchecked += (_, _) => { if (!_loading) { video.Enabled = false; _store.SaveSoon(); } };
+        BindNumber(VideoThresholdBox, video.ThresholdDb, -90, 0, v =>
+        {
+            video.ThresholdDb = v;
+            VideoMeter.Marker = LevelToBar((float)v);
+            _store.SaveSoon();
+        });
+        BindNumber(VideoSustainBox, video.SustainMs, 0, 5000, v => { video.SustainMs = (int)v; _store.SaveSoon(); });
+        BindNumber(VideoHoldBox, video.HoldMs, 0, 5000, v => { video.HoldMs = (int)v; _store.SaveSoon(); });
+
+        VideoMeter.Marker = LevelToBar((float)video.ThresholdDb);
     }
 
-    private MeterUi BuildTriggerRow(string title, TriggerSettings cfg, bool isMic)
+    /// <summary>把 XAML 里已有的输入框接到一个数值上：回车或失焦时提交，非法输入回退。</summary>
+    private void BindNumber(TextBox box, double value, double min, double max, Action<double> onChanged)
     {
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(118) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(118) });
+        var current = value;
+        box.Text = current.ToString("0", CultureInfo.InvariantCulture);
 
-        var toggle = new CheckBox
+        void Commit()
         {
-            Style = (Style)FindResource("Switch"),
-            IsChecked = cfg.Enabled,
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
-        toggle.Checked += (_, _) => { if (!_loading) { cfg.Enabled = true; _store.SaveSoon(); } };
-        toggle.Unchecked += (_, _) => { if (!_loading) { cfg.Enabled = false; _store.SaveSoon(); } };
-        Grid.SetColumn(toggle, 0);
-        grid.Children.Add(toggle);
-
-        var (cell, valueText, bar) = BuildBarLabel(title, 210);
-        Grid.SetColumn(cell, 1);
-        grid.Children.Add(cell);
-
-        if (isMic)
-        {
-            AddLabel(grid, "判定方式", 2);
-            var occupancy = new TextBlock
+            if (double.TryParse(box.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
             {
-                Text = "麦克风占用",
-                Style = (Style)FindResource("FieldLabel"),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 18, 0),
-            };
-            Grid.SetColumn(occupancy, 3);
-            grid.Children.Add(occupancy);
-        }
-        else
-        {
-            AddLabel(grid, "阈值 (dB)", 2);
-            AddBox(grid, NumberBox(cfg.ThresholdDb, -90, 0, v => { cfg.ThresholdDb = v; _store.SaveSoon(); }), 3);
+                current = Math.Clamp(parsed, min, max);
+                onChanged(current);
+            }
+            box.Text = current.ToString("0", CultureInfo.InvariantCulture);
         }
 
-        AddLabel(grid, "持续 (ms)", 4);
-        AddBox(grid, NumberBox(cfg.SustainMs, 0, 5000, v => { cfg.SustainMs = (int)v; _store.SaveSoon(); }), 5);
-
-        AddLabel(grid, "保持 (ms)", 6);
-        AddBox(grid, NumberBox(cfg.HoldMs, 0, 5000, v => { cfg.HoldMs = (int)v; _store.SaveSoon(); }), 7);
-
-        TriggerPanel.Children.Add(grid);
-        return new MeterUi { ValueText = valueText, Bar = bar };
+        box.LostFocus += (_, _) => Commit();
+        box.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(); };
     }
 
-    private (Grid Cell, TextBlock ValueText, ProgressBar Bar) BuildBarLabel(string text, double width)
-    {
-        var cell = new Grid { Height = 30, Width = width, VerticalAlignment = VerticalAlignment.Center };
-
-        var bar = new ProgressBar
-        {
-            Style = (Style)FindResource("WideBar"),
-            Minimum = 0,
-            Maximum = 1,
-            Height = 30,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var dock = new DockPanel { LastChildFill = true };
-        var valueText = new TextBlock
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 0),
-            FontSize = 12.5,
-            MaxWidth = 120,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            TextAlignment = TextAlignment.Right,
-        };
-        valueText.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-        DockPanel.SetDock(valueText, Dock.Right);
-
-        var caption = new TextBlock
-        {
-            Text = text,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(10, 0, 6, 0),
-            FontSize = 14,
-        };
-        caption.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimaryBrush");
-
-        dock.Children.Add(valueText);
-        dock.Children.Add(caption);
-
-        cell.Children.Add(bar);
-        cell.Children.Add(dock);
-        return (cell, valueText, bar);
-    }
-
-    private void AddLabel(Grid grid, string text, int column)
-    {
-        var label = new TextBlock
-        {
-            Text = text,
-            Style = (Style)FindResource("FieldLabel"),
-            Margin = new Thickness(0, 0, 10, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(label, column);
-        grid.Children.Add(label);
-    }
-
-    private void AddBox(Grid grid, TextBox box, int column)
-    {
-        box.Margin = new Thickness(0, 0, 18, 0);
-        box.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(box, column);
-        grid.Children.Add(box);
-    }
+    private const double LaneColumnWidth = 196;
+    private const double StateColumnWidth = 104;
 
     private void BuildTargets()
     {
         var grid = new Grid();
-        double[] widths = [292, 150, 112, 150, 112, 112];
-        foreach (var width in widths)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LaneColumnWidth) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LaneColumnWidth) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(StateColumnWidth) });
 
-        string[] headers = ["目标", "麦克风触发", "压低到", "视频触发", "压低到", "状态"];
+        string[] headers = ["目标", "麦克风触发", "视频触发", "状态"];
         for (var i = 0; i < headers.Length; i++)
         {
             var header = new TextBlock
             {
                 Text = headers[i],
-                Style = (Style)FindResource("Caption"),
-                Margin = new Thickness(0, 0, 12, 10),
+                FontSize = 12,
+                Margin = new Thickness(i == 0 ? 0 : 16, 0, 0, 9),
             };
+            header.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
             Grid.SetColumn(header, i);
             Grid.SetRow(header, 0);
             grid.Children.Add(header);
@@ -244,26 +161,59 @@ public partial class MainWindow : Window
 
     private void AddTargetRow(Grid grid, int row, TargetSettings target)
     {
-        var nameCell = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 12),
-        };
+        AddRowRule(grid, row);
+
+        var nameCell = new Grid { Margin = new Thickness(0, 8, 16, 8) };
+        nameCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+        nameCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(168) });
+        nameCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        nameCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
 
         var toggle = new CheckBox
         {
             Style = (Style)FindResource("Switch"),
             IsChecked = target.Enabled,
             VerticalAlignment = VerticalAlignment.Center,
-            Width = 44,
+            HorizontalAlignment = HorizontalAlignment.Left,
         };
         toggle.Checked += (_, _) => { if (!_loading) { target.Enabled = true; _store.SaveSoon(); } };
         toggle.Unchecked += (_, _) => { if (!_loading) { target.Enabled = false; _store.SaveSoon(); } };
-
-        var (barCell, volumeText, volumeBar) = BuildBarLabel(target.Name, 238);
         nameCell.Children.Add(toggle);
-        nameCell.Children.Add(barCell);
+
+        var name = new TextBlock
+        {
+            Text = target.Name,
+            FontSize = 13.5,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            ToolTip = target.Name,
+        };
+        name.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimaryBrush");
+        Grid.SetColumn(name, 1);
+        nameCell.Children.Add(name);
+
+        var volumeMeter = new SegmentedMeter
+        {
+            Height = 10,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0),
+        };
+        volumeMeter.SetResourceReference(SegmentedMeter.FillBrushProperty, "MeterIdleBrush");
+        volumeMeter.SetResourceReference(SegmentedMeter.EmptyBrushProperty, "MeterTrackBrush");
+        volumeMeter.SetResourceReference(SegmentedMeter.MarkerBrushProperty, "TextFaintBrush");
+        Grid.SetColumn(volumeMeter, 2);
+        nameCell.Children.Add(volumeMeter);
+
+        var volumeText = new TextBlock
+        {
+            FontSize = 12.5,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        volumeText.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        Grid.SetColumn(volumeText, 3);
+        nameCell.Children.Add(volumeText);
+
         Grid.SetColumn(nameCell, 0);
         Grid.SetRow(nameCell, row);
         grid.Children.Add(nameCell);
@@ -274,17 +224,16 @@ public partial class MainWindow : Window
             _store.SaveSoon();
             UpdatePercentState(target);
         });
-        micCombo.Margin = new Thickness(0, 0, 10, 12);
-        Grid.SetColumn(micCombo, 1);
-        Grid.SetRow(micCombo, row);
-        grid.Children.Add(micCombo);
-
-        var micPercent = PercentBox(target.OnMicDuckTo, v => { target.OnMicDuckTo = v / 100.0; _store.SaveSoon(); });
-        var micPercentPanel = PercentPanel(micPercent);
-        micPercentPanel.Margin = new Thickness(0, 0, 10, 12);
-        Grid.SetColumn(micPercentPanel, 2);
-        Grid.SetRow(micPercentPanel, row);
-        grid.Children.Add(micPercentPanel);
+        var micPercent = PercentBox(target.OnMicDuckTo, v =>
+        {
+            target.OnMicDuckTo = v / 100.0;
+            _store.SaveSoon();
+            UpdatePercentState(target);
+        });
+        var micCell = LaneCell(micCombo, micPercent);
+        Grid.SetColumn(micCell, 1);
+        Grid.SetRow(micCell, row);
+        grid.Children.Add(micCell);
 
         var videoCombo = ActionCombo(target.OnVideo, action =>
         {
@@ -292,26 +241,27 @@ public partial class MainWindow : Window
             _store.SaveSoon();
             UpdatePercentState(target);
         });
-        videoCombo.Margin = new Thickness(0, 0, 10, 12);
-        Grid.SetColumn(videoCombo, 3);
-        Grid.SetRow(videoCombo, row);
-        grid.Children.Add(videoCombo);
-
-        var videoPercent = PercentBox(target.OnVideoDuckTo, v => { target.OnVideoDuckTo = v / 100.0; _store.SaveSoon(); });
-        var videoPercentPanel = PercentPanel(videoPercent);
-        videoPercentPanel.Margin = new Thickness(0, 0, 10, 12);
-        Grid.SetColumn(videoPercentPanel, 4);
-        Grid.SetRow(videoPercentPanel, row);
-        grid.Children.Add(videoPercentPanel);
+        var videoPercent = PercentBox(target.OnVideoDuckTo, v =>
+        {
+            target.OnVideoDuckTo = v / 100.0;
+            _store.SaveSoon();
+            UpdatePercentState(target);
+        });
+        var videoCell = LaneCell(videoCombo, videoPercent);
+        Grid.SetColumn(videoCell, 2);
+        Grid.SetRow(videoCell, row);
+        grid.Children.Add(videoCell);
 
         var state = new TextBlock
         {
             Text = "—",
-            Style = (Style)FindResource("Caption"),
+            FontSize = 12.5,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 12),
+            Margin = new Thickness(16, 0, 0, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        Grid.SetColumn(state, 5);
+        state.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        Grid.SetColumn(state, 3);
         Grid.SetRow(state, row);
         grid.Children.Add(state);
 
@@ -323,10 +273,40 @@ public partial class MainWindow : Window
             VideoPercent = videoPercent,
             State = state,
             VolumeText = volumeText,
-            VolumeBar = volumeBar,
+            VolumeMeter = volumeMeter,
         };
 
         UpdatePercentState(target);
+    }
+
+    private static void AddRowRule(Grid grid, int row)
+    {
+        var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Top };
+        rule.SetResourceReference(Border.BackgroundProperty, "RuleBrush");
+        Grid.SetRow(rule, row);
+        Grid.SetColumnSpan(rule, 4);
+        grid.Children.Add(rule);
+    }
+
+    private StackPanel LaneCell(ComboBox combo, TextBox percent)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(16, 0, 4, 0),
+        };
+        combo.Margin = new Thickness(0, 0, 6, 0);
+        panel.Children.Add(combo);
+        panel.Children.Add(percent);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "%",
+            Style = (Style)FindResource("ParamUnit"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4, 0, 0, 0),
+        });
+        return panel;
     }
 
     private ComboBox ActionCombo(TargetAction current, Action<TargetAction> onChanged)
@@ -337,7 +317,6 @@ public partial class MainWindow : Window
             ItemsSource = new[] { "不处理", "压低音量", "暂停播放" },
             SelectedIndex = (int)current,
             VerticalAlignment = VerticalAlignment.Center,
-            Width = 138,
         };
         combo.SelectionChanged += (_, _) =>
         {
@@ -349,24 +328,10 @@ public partial class MainWindow : Window
 
     private TextBox PercentBox(double fraction, Action<double> onChanged)
     {
-        return NumberBox(fraction * 100, 0, 100, onChanged, width: 74);
+        return NumberBox(fraction * 100, 0, 100, onChanged, width: 52);
     }
 
-    private StackPanel PercentPanel(TextBox box)
-    {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        box.Margin = new Thickness(0, 0, 6, 0);
-        panel.Children.Add(box);
-        panel.Children.Add(new TextBlock
-        {
-            Text = "%",
-            Style = (Style)FindResource("Caption"),
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        return panel;
-    }
-
-    private TextBox NumberBox(double value, double min, double max, Action<double> onChanged, double width = 88)
+    private TextBox NumberBox(double value, double min, double max, Action<double> onChanged, double width = 58)
     {
         var box = new TextBox
         {
@@ -376,18 +341,15 @@ public partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
         };
 
+        var current = value;
         void Commit()
         {
             if (double.TryParse(box.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
             {
-                var clamped = Math.Clamp(parsed, min, max);
-                box.Text = clamped.ToString("0", CultureInfo.InvariantCulture);
-                onChanged(clamped);
+                current = Math.Clamp(parsed, min, max);
+                onChanged(current);
             }
-            else
-            {
-                box.Text = value.ToString("0", CultureInfo.InvariantCulture);
-            }
+            box.Text = current.ToString("0", CultureInfo.InvariantCulture);
         }
 
         box.LostFocus += (_, _) => Commit();
@@ -400,6 +362,16 @@ public partial class MainWindow : Window
         if (!_targets.TryGetValue(target.Id, out var ui)) return;
         ui.MicPercent.IsEnabled = target.OnMic == TargetAction.Duck;
         ui.VideoPercent.IsEnabled = target.OnVideo == TargetAction.Duck;
+        ui.VolumeMeter.Marker = DuckMarker(target);
+    }
+
+    /// <summary>音量条上的刻度：这个目标被压低时会落到哪一格。</summary>
+    private static double DuckMarker(TargetSettings target)
+    {
+        var levels = new List<double>();
+        if (target.OnMic == TargetAction.Duck) levels.Add(target.OnMicDuckTo);
+        if (target.OnVideo == TargetAction.Duck) levels.Add(target.OnVideoDuckTo);
+        return levels.Count == 0 ? double.NaN : levels.Min();
     }
 
     // ---- ignored capture processes ----
@@ -445,10 +417,12 @@ public partial class MainWindow : Window
         {
             var hint = new TextBlock
             {
-                Text = "还没有自定义忽略的进程，输入进程名后点「添加」。",
-                FontSize = 13.5,
+                Text = "还没有自定义进程。占用麦克风的程序填在这里就不会触发闪避，名字见任务管理器「详细信息」。",
+                FontSize = 12.5,
+                Margin = new Thickness(0, 0, 0, 6),
+                VerticalAlignment = VerticalAlignment.Center,
             };
-            hint.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+            hint.SetResourceReference(TextBlock.ForegroundProperty, "TextFaintBrush");
             IgnoredPanel.Children.Add(hint);
         }
     }
@@ -457,23 +431,19 @@ public partial class MainWindow : Window
     {
         var chip = new Border
         {
-            CornerRadius = new CornerRadius(6),
-            BorderThickness = new Thickness(1),
-            Padding = removable ? new Thickness(12, 5, 5, 5) : new Thickness(12, 5, 12, 5),
-            Margin = new Thickness(0, 0, 8, 8),
+            Padding = new Thickness(0, 1, 0, 1),
+            Margin = new Thickness(0, 0, 16, 4),
         };
-        chip.SetResourceReference(Border.BackgroundProperty, "ChipBrush");
-        chip.SetResourceReference(Border.BorderBrushProperty, "StrokeBrush");
         if (!removable) chip.ToolTip = "内置系统进程，始终被忽略";
 
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         var label = new TextBlock
         {
             Text = name,
-            FontSize = 13.5,
+            FontSize = 12.5,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        label.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimaryBrush");
+        label.SetResourceReference(TextBlock.ForegroundProperty, removable ? "TextPrimaryBrush" : "TextFaintBrush");
         row.Children.Add(label);
 
         if (removable)
@@ -482,7 +452,7 @@ public partial class MainWindow : Window
             {
                 Content = "×",
                 Style = (Style)FindResource("ChipButton"),
-                Margin = new Thickness(7, 0, 0, 0),
+                Margin = new Thickness(4, 0, 0, 0),
                 ToolTip = "从忽略列表移除",
             };
             remove.Click += (_, _) =>
@@ -504,35 +474,59 @@ public partial class MainWindow : Window
     private void Refresh()
     {
         var snapshot = _engine.Snapshot;
-
         var enabled = _store.Settings.Enabled;
-        RunPillText.Text = enabled ? "● 运行中" : "○ 已停止";
+
         RunPill.Background = (Brush)FindResource(enabled ? "PillRunningBrush" : "PillStoppedBrush");
-        RunPillText.Foreground = (Brush)FindResource(enabled ? "SuccessBrush" : "TextSecondaryBrush");
+        RunPillText.Text = enabled ? "运行中" : "已停止";
+        RunPillText.Foreground = (Brush)FindResource(enabled ? "SignalBrush" : "TextSecondaryBrush");
+        RunDot.Fill = (Brush)FindResource(enabled ? "SignalBrush" : "TextFaintBrush");
 
-        ToggleButton.Content = enabled ? "停止闪避" : "开始闪避";
-        ToggleButton.Background = enabled
-            ? (Brush)FindResource("DangerBrush")
-            : (Brush)FindResource("AccentBrush");
+        if (_toggleEnabled != enabled)
+        {
+            _toggleEnabled = enabled;
+            ToggleButton.Style = (Style)FindResource(enabled ? "StopButton" : "MainButton");
+            ToggleButton.Content = enabled ? "停止闪避" : "开始闪避";
+        }
 
-        _micMeter.ValueText.Text = snapshot.MicInUse ? snapshot.MicOwner ?? "占用中" : "空闲";
-        _micMeter.Bar.Value = snapshot.MicInUse ? 1 : 0;
-        _micMeter.Bar.Foreground = (Brush)FindResource(snapshot.MicActive ? "MeterActiveBrush" : "MeterBrush");
+        MicMeter.Value = snapshot.MicInUse ? 1 : 0;
+        MicMeter.FillBrush = (Brush)FindResource(snapshot.MicInUse ? "SignalFillBrush" : "MeterIdleBrush");
+        MicReadout.Text = snapshot.MicInUse ? snapshot.MicOwner ?? "占用中" : "空闲";
+        MicReadout.ToolTip = snapshot.MicInUse
+            ? $"麦克风正被 {snapshot.MicOwner ?? "其他程序"} 占用"
+            : "没有程序占用麦克风";
+        MicReadout.SetResourceReference(TextBlock.ForegroundProperty,
+            snapshot.MicInUse ? "TextPrimaryBrush" : "TextSecondaryBrush");
 
-        _videoMeter.ValueText.Text = FormatDb(snapshot.VideoLevel);
-        _videoMeter.Bar.Value = LevelToBar(snapshot.VideoLevel);
-        _videoMeter.Bar.Foreground = (Brush)FindResource(snapshot.VideoActive ? "MeterActiveBrush" : "MeterBrush");
+        VideoMeter.Value = LevelToBar(snapshot.VideoLevel);
+        VideoMeter.FillBrush = (Brush)FindResource(snapshot.VideoActive ? "SignalFillBrush" : "MeterIdleBrush");
+        VideoReadout.Text = FormatDb(snapshot.VideoLevel);
+        VideoReadout.SetResourceReference(TextBlock.ForegroundProperty,
+            snapshot.VideoActive ? "TextPrimaryBrush" : "TextSecondaryBrush");
 
         foreach (var (id, ui) in _targets)
         {
             var volume = snapshot.TargetVolumes.TryGetValue(id, out var v) ? v : 0f;
-            ui.VolumeBar.Value = Math.Clamp(volume, 0, 1);
+            ui.VolumeMeter.Value = Math.Clamp(volume, 0, 1);
             ui.VolumeText.Text = $"{volume * 100:0}%";
 
             var state = snapshot.TargetStates.TryGetValue(id, out var s) ? s : "—";
+
+            if (state.StartsWith("暂停中", StringComparison.Ordinal))
+            {
+                ui.State.Text = "暂停失败";
+                ui.State.SetResourceReference(TextBlock.ForegroundProperty, "StopBrush");
+                ui.VolumeMeter.SetResourceReference(SegmentedMeter.FillBrushProperty, "MeterIdleBrush");
+                continue;
+            }
+
+            var disabled = state == "已禁用";
+            var active = state.StartsWith("压低", StringComparison.Ordinal) || state == "已暂停";
+
             ui.State.Text = state;
-            ui.VolumeBar.Foreground = (Brush)FindResource(
-                state.Contains("暂停") || state.Contains("禁用") ? "MeterIdleBrush" : "MeterBrush");
+            ui.State.SetResourceReference(TextBlock.ForegroundProperty,
+                disabled ? "TextFaintBrush" : active ? "SignalBrush" : "TextSecondaryBrush");
+            ui.VolumeMeter.SetResourceReference(SegmentedMeter.FillBrushProperty,
+                disabled ? "MeterTrackBrush" : active ? "SignalFillBrush" : "MeterIdleBrush");
         }
     }
 

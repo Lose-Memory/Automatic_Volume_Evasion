@@ -23,11 +23,11 @@ internal static class AppIcon
 
         float s = size;
 
-        using (var background = new SolidBrush(Color.FromArgb(0x00, 0x67, 0xC0)))
+        using (var background = new SolidBrush(Color.FromArgb(0x1A, 0x1A, 0x18)))
         using (var rounded = RoundedRect(0, 0, s, s, s * 0.22f))
             g.FillPath(background, rounded);
 
-        using var white = new SolidBrush(Color.White);
+        using var white = new SolidBrush(Color.FromArgb(0xF4, 0xF5, 0xEF));
 
         using (var body = new GraphicsPath())
         {

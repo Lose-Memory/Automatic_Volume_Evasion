@@ -141,6 +141,8 @@ public sealed class AppSettings
 
     public void Normalize()
     {
+        Migrate();
+
         Mic ??= new TriggerSettings();
         Video ??= new TriggerSettings();
         Targets ??= [];
@@ -166,6 +168,26 @@ public sealed class AppSettings
         Window ??= new WindowPlacement();
         Window.Width = Math.Clamp(Window.Width, 600, 8000);
         Window.Height = Math.Clamp(Window.Height, 400, 8000);
+    }
+
+    /// <summary>
+    /// v2：1.2 及更早版本在回升音量时会把 99.x% 当成用户音量写进 AppVolumes，
+    /// 导致下次启动仍还原到 99%。升级时一次性抹平这些残留。
+    /// </summary>
+    private void Migrate()
+    {
+        if (Version >= 2) return;
+
+        if (AppVolumes != null)
+        {
+            foreach (var key in AppVolumes.Keys.ToList())
+            {
+                var volume = AppVolumes[key];
+                if (volume > 0.99f && volume < 1f) AppVolumes[key] = 1f;
+            }
+        }
+
+        Version = 2;
     }
 
     /// <summary>Trims entries, drops a trailing ".exe" (Task Manager shows that form), and removes duplicates.</summary>

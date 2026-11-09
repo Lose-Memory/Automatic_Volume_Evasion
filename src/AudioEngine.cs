@@ -770,9 +770,17 @@ public sealed class AudioEngine : IDisposable
                     {
                         if (session.Applied >= 0f && MathF.Abs(volume - session.Applied) > 0.02f)
                         {
+                            // 用户自己拧了音量条，把它当成新的基准
                             session.Base = volume;
                             SaveVolume(key, volume);
                         }
+                        else if (MathF.Abs(volume - session.Base) > 0.0005f)
+                        {
+                            // 回升过程写下的最后一格是 99.x%，要显式补回用户原来的音量
+                            control.SimpleAudioVolume.Volume = session.Base;
+                            volume = session.Base;
+                        }
+
                         session.Applied = volume;
                     }
                     else
