@@ -8,7 +8,7 @@
         Background="{DynamicResource WindowBrush}"
         Foreground="{DynamicResource TextPrimaryBrush}"
         FontFamily="Segoe UI Variable Text, Microsoft YaHei UI"
-        FontSize="13.5"
+        FontSize="15"
         TextOptions.TextFormattingMode="Display"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
@@ -34,12 +34,12 @@
                 BorderBrush="{DynamicResource RuleBrush}" BorderThickness="0,0,0,1">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="AutoVolume" FontSize="19" FontWeight="SemiBold" />
+                    <TextBlock Text="AutoVolume" FontSize="21" FontWeight="SemiBold" />
                     <Border Width="1" Height="15" Margin="14,0" VerticalAlignment="Center"
                             Background="{DynamicResource RuleBrush}" />
-                    <TextBlock Text="音量自动闪避" FontSize="13" VerticalAlignment="Center"
+                    <TextBlock Text="音量自动闪避" FontSize="14" VerticalAlignment="Center"
                                Foreground="{DynamicResource TextSecondaryBrush}" />
-                    <TextBlock x:Name="VersionText" FontSize="11.5" Margin="10,1,0,0" VerticalAlignment="Center"
+                    <TextBlock x:Name="VersionText" FontSize="12.5" Margin="10,1,0,0" VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFaintBrush}" />
                 </StackPanel>
 
@@ -49,7 +49,7 @@
                     <Border x:Name="RunPill" Style="{StaticResource Pill}" Margin="0,0,12,0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Ellipse x:Name="RunDot" Width="6" Height="6" VerticalAlignment="Center" />
-                            <TextBlock x:Name="RunPillText" FontSize="12" Margin="7,0,0,0" VerticalAlignment="Center" />
+                            <TextBlock x:Name="RunPillText" FontSize="13" Margin="7,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
                     </Border>
                     <Button x:Name="ToggleButton" Style="{StaticResource MainButton}"
@@ -182,18 +182,16 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="20" />
+                                <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <ComboBox x:Name="MusicProgramCombo" Style="{StaticResource ActionCombo}" Width="Auto"
                                       VerticalAlignment="Center" />
                             <Button Grid.Column="1" Content="添加" Style="{StaticResource GhostButton}"
                                     Margin="8,0,0,0" Click="AddMusicFromCombo_Click" />
-                            <TextBlock Grid.Column="2" Text="或手动输入" Style="{StaticResource ParamLabel}"
-                                       VerticalAlignment="Center" Margin="20,0,8,0" />
-                            <TextBox x:Name="MusicManualBox" Style="{StaticResource NumberBox}" Width="170"
-                                     HorizontalContentAlignment="Left" />
+                            <TextBox x:Name="MusicManualBox" Grid.Column="3" Style="{StaticResource HintBox}"
+                                     Tag="手动输入进程名，例如 KuGou" />
                             <Button Grid.Column="4" Content="添加" Style="{StaticResource GhostButton}"
                                     Margin="8,0,0,0" Click="AddMusicFromText_Click" />
                         </Grid>
@@ -220,18 +218,16 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="20" />
+                                <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <ComboBox x:Name="VideoProgramCombo" Style="{StaticResource ActionCombo}" Width="Auto"
                                       VerticalAlignment="Center" />
                             <Button Grid.Column="1" Content="添加" Style="{StaticResource GhostButton}"
                                     Margin="8,0,0,0" Click="AddVideoFromCombo_Click" />
-                            <TextBlock Grid.Column="2" Text="或手动输入" Style="{StaticResource ParamLabel}"
-                                       VerticalAlignment="Center" Margin="20,0,8,0" />
-                            <TextBox x:Name="VideoManualBox" Style="{StaticResource NumberBox}" Width="170"
-                                     HorizontalContentAlignment="Left" />
+                            <TextBox x:Name="VideoManualBox" Grid.Column="3" Style="{StaticResource HintBox}"
+                                     Tag="手动输入进程名，例如 PotPlayerMini64" />
                             <Button Grid.Column="4" Content="添加" Style="{StaticResource GhostButton}"
                                     Margin="8,0,0,0" Click="AddVideoFromText_Click" />
                         </Grid>
@@ -250,7 +246,7 @@
                     <Border Grid.Column="1" Height="1" Margin="14,0" VerticalAlignment="Center"
                             Background="{DynamicResource RuleBrush}" />
                     <CheckBox x:Name="ShowSystemIgnored" Grid.Column="2" Style="{StaticResource Switch}"
-                              Content="显示内置系统进程" FontSize="12.5"
+                              Content="显示内置系统进程" FontSize="13.5"
                               Foreground="{DynamicResource TextSecondaryBrush}"
                               Checked="ShowSystemIgnored_Changed" Unchecked="ShowSystemIgnored_Changed" />
                 </Grid>
@@ -277,7 +273,7 @@
         <Border Grid.Row="2" Height="40" Padding="24,0"
                 BorderBrush="{DynamicResource RuleBrush}" BorderThickness="0,1,0,0">
             <Grid>
-                <TextBlock x:Name="PathText" Style="{StaticResource Caption}" FontSize="11.5"
+                <TextBlock x:Name="PathText" Style="{StaticResource Caption}" FontSize="12.5"
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,16,0"
                            Foreground="{DynamicResource TextFaintBrush}" />
                 <Button Content="打开程序目录" Style="{StaticResource LinkButton}"

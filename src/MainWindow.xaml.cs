@@ -77,7 +77,11 @@ public partial class MainWindow : Window
         Icon = AppIcon.CreateImageSource(64);
         ApplyTheme();
         RestorePlacement();
-        SourceInitialized += (_, _) => ApplyTitleBarTheme();
+        SourceInitialized += (_, _) =>
+        {
+            ApplyTitleBarTheme();
+            ApplyBackdrop();
+        };
 
         PathText.Text = $"配置：{store.FilePath}";
 
@@ -295,7 +299,7 @@ public partial class MainWindow : Window
                 Text = category == TargetCategory.Music
                     ? "还没有音乐程序。触发时这些程序会被压低或暂停。"
                     : "还没有视频程序。视频播放触发不会生效。",
-                FontSize = 13,
+                FontSize = 14,
                 Margin = new Thickness(0, 0, 0, 4),
             };
             hint.SetResourceReference(TextBlock.ForegroundProperty, "TextFaintBrush");
@@ -308,10 +312,11 @@ public partial class MainWindow : Window
         var outer = new StackPanel { Margin = new Thickness(0, 4, 0, 8) };
 
         var top = new Grid();
+        // 名称列固定宽度、电平条吃掉剩余空间：两张表的电平条因此始终左右对齐。
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(72) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -330,7 +335,7 @@ public partial class MainWindow : Window
         var name = new TextBlock
         {
             Text = target.Name,
-            FontSize = 14,
+            FontSize = 15,
             TextTrimming = TextTrimming.CharacterEllipsis,
             ToolTip = target.Name,
         };
@@ -340,7 +345,7 @@ public partial class MainWindow : Window
         var processLine = new TextBlock
         {
             Text = string.Join(" · ", target.Processes),
-            FontSize = 12,
+            FontSize = 13,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         processLine.SetResourceReference(TextBlock.ForegroundProperty, "TextFaintBrush");
@@ -363,7 +368,7 @@ public partial class MainWindow : Window
 
         var volumeText = new TextBlock
         {
-            FontSize = 13,
+            FontSize = 14,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -374,7 +379,7 @@ public partial class MainWindow : Window
         var state = new TextBlock
         {
             Text = "—",
-            FontSize = 13,
+            FontSize = 14,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(14, 0, 0, 0),
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -499,7 +504,7 @@ public partial class MainWindow : Window
         var block = new TextBlock
         {
             Text = text,
-            FontSize = 12.5,
+            FontSize = 13.5,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(leftMargin, 0, 6, 0),
         };
@@ -512,7 +517,7 @@ public partial class MainWindow : Window
         var block = new TextBlock
         {
             Text = text,
-            FontSize = 12,
+            FontSize = 13,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(4, 0, 0, 0),
         };
@@ -728,7 +733,7 @@ public partial class MainWindow : Window
             var hint = new TextBlock
             {
                 Text = "还没有自定义进程。占用麦克风的程序填在这里就不会触发闪避，名字见任务管理器「详细信息」。",
-                FontSize = 12.5,
+                FontSize = 13.5,
                 Margin = new Thickness(0, 0, 0, 6),
                 VerticalAlignment = VerticalAlignment.Center,
             };
@@ -750,7 +755,7 @@ public partial class MainWindow : Window
         var label = new TextBlock
         {
             Text = name,
-            FontSize = 12.5,
+            FontSize = 13.5,
             VerticalAlignment = VerticalAlignment.Center,
         };
         label.SetResourceReference(TextBlock.ForegroundProperty, removable ? "TextPrimaryBrush" : "TextFaintBrush");
@@ -867,6 +872,43 @@ public partial class MainWindow : Window
 
         ThemeButton.Content = _store.Settings.Theme == "Dark" ? "浅色模式" : "深色模式";
         ApplyTitleBarTheme();
+        ApplyBackdrop();
+    }
+
+    /// <summary>
+    /// Windows 11 22H2+ can paint Mica (wallpaper tint) or Acrylic (frosted blur) behind the window.
+    /// The WPF surface has to be transparent for the backdrop to show; panels stay semi-opaque so
+    /// text never sits directly on the material.
+    /// </summary>
+    private void ApplyBackdrop()
+    {
+        var material = _store.Settings.WindowMaterial;
+        var supported = Environment.OSVersion.Version.Build >= 22621;
+        var glass = supported && material != "None";
+
+        // A fully transparent surface would put text on whatever is behind the window, so the
+// material shows through a high-opacity scrim instead.
+        Background = glass ? (Brush)FindResource("WindowGlassBrush") : (Brush)FindResource("WindowBrush");
+
+        if (glass && PresentationSource.FromVisual(this) is HwndSource source)
+            source.CompositionTarget.BackgroundColor = Colors.Transparent;
+
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero) return;
+
+        // DWMWA_SYSTEMBACKDROP_TYPE: 1 = none, 2 = Mica, 3 = Acrylic
+        var value = !glass ? 1 : material == "Acrylic" ? 3 : 2;
+        var hr = DwmSetWindowAttribute(handle, 38, ref value, sizeof(int));
+
+        // If the backdrop is rejected the transparent surface would show straight through the
+        // window, so fall back to the solid background instead.
+        if (glass && hr != 0)
+        {
+            Background = (Brush)FindResource("WindowBrush");
+            glass = false;
+        }
+
+        Log.Write($"窗口材质: {material}, DWM=0x{hr:X8}, glass={glass}");
     }
 
     /// <summary>Windows draws the caption itself; DWM's immersive-dark-mode flag is the only way to darken it.</summary>

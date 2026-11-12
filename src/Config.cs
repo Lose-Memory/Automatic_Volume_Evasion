@@ -107,6 +107,9 @@ public sealed class AppSettings
     /// <summary>Window colour scheme: "Light" or "Dark".</summary>
     public string Theme { get; set; } = "Light";
 
+    /// <summary>Window backdrop: "None", "Mica" or "Acrylic". Needs Windows 11 22H2 or newer.</summary>
+    public string WindowMaterial { get; set; } = "Mica";
+
     /// <summary>Last window size and position.</summary>
     public WindowPlacement Window { get; set; } = new();
 
@@ -181,6 +184,12 @@ public sealed class AppSettings
         ScanMsCapture = Math.Clamp(ScanMsCapture, 50, 5000);
         RefreshMs = Math.Clamp(RefreshMs, 100, 5000);
         Theme = string.Equals(Theme, "Dark", StringComparison.OrdinalIgnoreCase) ? "Dark" : "Light";
+        WindowMaterial = WindowMaterial switch
+        {
+            "Acrylic" => "Acrylic",
+            "Mica" => "Mica",
+            _ => "None",
+        };
         Window ??= new WindowPlacement();
         Window.Width = Math.Clamp(Window.Width, 600, 8000);
         Window.Height = Math.Clamp(Window.Height, 400, 8000);

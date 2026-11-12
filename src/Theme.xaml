@@ -7,42 +7,42 @@
         <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource RuleBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Padding" Value="18,16" />
     </Style>
 
     <Style x:Key="SectionLabel" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontSize" Value="13.5" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
     </Style>
 
     <Style x:Key="RowTitle" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="13.5" />
+        <Setter Property="FontSize" Value="15" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style x:Key="Readout" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="13.5" />
+        <Setter Property="FontSize" Value="15" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style x:Key="Caption" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontSize" Value="13.5" />
         <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="LineHeight" Value="19" />
     </Style>
 
     <Style x:Key="ParamLabel" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
     </Style>
 
     <Style x:Key="ParamUnit" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
     </Style>
 
@@ -53,7 +53,7 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="18,0" />
         <Setter Property="Height" Value="34" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -82,7 +82,7 @@
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Padding" Value="18,0" />
         <Setter Property="Height" Value="34" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -112,7 +112,7 @@
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Padding" Value="12,0" />
         <Setter Property="Height" Value="30" />
-        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontSize" Value="13.5" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>
@@ -137,7 +137,7 @@
 
     <Style x:Key="LinkButton" TargetType="Button">
         <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontSize" Value="13.5" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>
@@ -159,7 +159,7 @@
     <Style x:Key="NumberBox" TargetType="TextBox">
         <Setter Property="Height" Value="26" />
         <Setter Property="Width" Value="48" />
-        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontSize" Value="13.5" />
         <Setter Property="Background" Value="{DynamicResource PanelAltBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}" />
@@ -191,10 +191,53 @@
         </Setter>
     </Style>
 
+    <!-- 带占位提示的输入框，占位文字写在 Tag 上。 -->
+    <Style x:Key="HintBox" TargetType="TextBox">
+        <Setter Property="Height" Value="28" />
+        <Setter Property="FontSize" Value="13.5" />
+        <Setter Property="Background" Value="{DynamicResource PanelAltBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource SignalFillBrush}" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                            BorderBrush="{DynamicResource RuleBrush}"
+                            BorderThickness="1" CornerRadius="2">
+                        <Grid>
+                            <TextBlock x:Name="Hint" Text="{TemplateBinding Tag}" Margin="9,0"
+                                       VerticalAlignment="Center" Visibility="Collapsed"
+                                       Foreground="{DynamicResource TextFaintBrush}" FontSize="13" />
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="6,0" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter TargetName="Hint" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource SignalBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource RuleStrongBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource DisabledSurfaceBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="ChipButton" TargetType="Button">
         <Setter Property="Width" Value="16" />
         <Setter Property="Height" Value="16" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -216,7 +259,7 @@
 
     <Style x:Key="ComboItemStyle" TargetType="ComboBoxItem">
         <Setter Property="Padding" Value="9,6" />
-        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontSize" Value="13.5" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="Template">
             <Setter.Value>
@@ -240,7 +283,7 @@
     <Style x:Key="ActionCombo" TargetType="ComboBox">
         <Setter Property="Height" Value="28" />
         <Setter Property="Width" Value="104" />
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="ItemContainerStyle" Value="{StaticResource ComboItemStyle}" />
         <Setter Property="Template">
@@ -294,7 +337,7 @@
 
     <Style x:Key="Switch" TargetType="CheckBox">
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -328,7 +371,7 @@
     </Style>
 
     <Style x:Key="Pill" TargetType="Border">
-        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Height" Value="26" />
         <Setter Property="Padding" Value="9,0" />
         <Setter Property="Background" Value="{DynamicResource PillStoppedBrush}" />
@@ -381,10 +424,9 @@
         </Style.Triggers>
     </Style>
 
-
-    <!-- 三段互斥过滤：选中的一段用墨色填充，其余保持透明。 -->
+<!-- 三段互斥过滤：选中的一段用墨色填充，其余保持透明。 -->
     <Style x:Key="SegmentRadio" TargetType="RadioButton">
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
         <Setter Property="Padding" Value="10,4" />
         <Setter Property="Cursor" Value="Hand" />
@@ -408,4 +450,5 @@
             </Setter.Value>
         </Setter>
     </Style>
+
 </ResourceDictionary>

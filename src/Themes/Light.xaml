@@ -2,8 +2,9 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <SolidColorBrush x:Key="WindowBrush" Color="#E8E8E4" />
-    <SolidColorBrush x:Key="PanelBrush" Color="#F8F8F4" />
-    <SolidColorBrush x:Key="PanelAltBrush" Color="#EFEFE9" />
+    <SolidColorBrush x:Key="WindowGlassBrush" Color="#B8E8E8E4" />
+    <SolidColorBrush x:Key="PanelBrush" Color="#CCF8F8F4" />
+    <SolidColorBrush x:Key="PanelAltBrush" Color="#D9EFEFE9" />
     <SolidColorBrush x:Key="RuleBrush" Color="#D5D5CE" />
     <SolidColorBrush x:Key="RuleStrongBrush" Color="#B4B4AB" />
 
