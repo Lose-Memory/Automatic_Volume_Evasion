@@ -410,6 +410,7 @@ public partial class MainWindow : Window
             _store.SaveSoon();
             UpdatePercentState(target);
         }, allowPause: target.Category == TargetCategory.Music);
+        micCombo.Margin = new Thickness(0, 0, 8, 0);
         edit.Children.Add(micCombo);
 
         var micPercent = PercentBox(target.OnMicDuckTo, v =>
@@ -431,6 +432,7 @@ public partial class MainWindow : Window
                 _store.SaveSoon();
                 UpdatePercentState(target);
             });
+            videoCombo.Margin = new Thickness(0, 0, 8, 0);
             edit.Children.Add(videoCombo);
 
             videoPercent = PercentBox(target.OnVideoDuckTo, v =>

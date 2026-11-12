@@ -157,7 +157,7 @@
     </Style>
 
     <Style x:Key="NumberBox" TargetType="TextBox">
-        <Setter Property="Height" Value="26" />
+        <Setter Property="Height" Value="30" />
         <Setter Property="Width" Value="48" />
         <Setter Property="FontSize" Value="13.5" />
         <Setter Property="Background" Value="{DynamicResource PanelAltBrush}" />
@@ -193,7 +193,7 @@
 
     <!-- 带占位提示的输入框，占位文字写在 Tag 上。 -->
     <Style x:Key="HintBox" TargetType="TextBox">
-        <Setter Property="Height" Value="28" />
+        <Setter Property="Height" Value="30" />
         <Setter Property="FontSize" Value="13.5" />
         <Setter Property="Background" Value="{DynamicResource PanelAltBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
@@ -281,7 +281,7 @@
     </Style>
 
     <Style x:Key="ActionCombo" TargetType="ComboBox">
-        <Setter Property="Height" Value="28" />
+        <Setter Property="Height" Value="30" />
         <Setter Property="Width" Value="104" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
