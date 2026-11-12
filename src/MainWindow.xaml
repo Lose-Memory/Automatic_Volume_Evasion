@@ -76,6 +76,11 @@
                         <TextBox x:Name="RefreshBox" Style="{StaticResource NumberBox}" Width="62" Height="26"
                                  Margin="8,0,5,0" />
                         <TextBlock Text="ms" Style="{StaticResource ParamUnit}" VerticalAlignment="Center" />
+                        <TextBlock Text="麦克风扫描" Style="{StaticResource ParamLabel}" Margin="18,0,0,0"
+                                   VerticalAlignment="Center" />
+                        <TextBox x:Name="ScanBox" Style="{StaticResource NumberBox}" Width="62" Height="26"
+                                 Margin="8,0,5,0" />
+                        <TextBlock Text="ms" Style="{StaticResource ParamUnit}" VerticalAlignment="Center" />
                     </StackPanel>
                 </Grid>
 
@@ -161,23 +166,77 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="目标" Style="{StaticResource SectionLabel}" />
+                    <TextBlock Text="音乐程序" Style="{StaticResource SectionLabel}" />
                     <Border Grid.Column="1" Height="1" Margin="14,0" VerticalAlignment="Center"
                             Background="{DynamicResource RuleBrush}" />
+                    <StackPanel x:Name="MusicFilter" Grid.Column="2" Orientation="Horizontal"
+                                VerticalAlignment="Center" />
                 </Grid>
 
                 <Border Style="{StaticResource Panel}" Margin="0,0,0,16">
                     <StackPanel>
-                        <StackPanel x:Name="TargetPanel" />
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <TextBlock Text="酷狗暂停热键" Style="{StaticResource ParamLabel}"
-                                       VerticalAlignment="Center" />
-                            <TextBox x:Name="HotkeyBox" Style="{StaticResource NumberBox}" Width="148"
-                                     HorizontalContentAlignment="Center" Margin="8,0,10,0" />
-                            <TextBlock Text="「暂停播放」动作依赖该全局热键"
-                                       Style="{StaticResource ParamUnit}" VerticalAlignment="Center" />
-                        </StackPanel>
+                        <StackPanel x:Name="MusicTargetPanel" />
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ComboBox x:Name="MusicProgramCombo" Style="{StaticResource ActionCombo}" Width="Auto"
+                                      VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Content="添加" Style="{StaticResource GhostButton}"
+                                    Margin="8,0,0,0" Click="AddMusicFromCombo_Click" />
+                            <TextBlock Grid.Column="2" Text="或手动输入" Style="{StaticResource ParamLabel}"
+                                       VerticalAlignment="Center" Margin="20,0,8,0" />
+                            <TextBox x:Name="MusicManualBox" Style="{StaticResource NumberBox}" Width="170"
+                                     HorizontalContentAlignment="Left" />
+                            <Button Grid.Column="4" Content="添加" Style="{StaticResource GhostButton}"
+                                    Margin="8,0,0,0" Click="AddMusicFromText_Click" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="视频程序" Style="{StaticResource SectionLabel}" />
+                    <Border Grid.Column="1" Height="1" Margin="14,0" VerticalAlignment="Center"
+                            Background="{DynamicResource RuleBrush}" />
+                    <StackPanel x:Name="VideoFilter" Grid.Column="2" Orientation="Horizontal"
+                                VerticalAlignment="Center" />
+                </Grid>
+
+                <Border Style="{StaticResource Panel}" Margin="0,0,0,16">
+                    <StackPanel>
+                        <StackPanel x:Name="VideoTargetPanel" />
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ComboBox x:Name="VideoProgramCombo" Style="{StaticResource ActionCombo}" Width="Auto"
+                                      VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Content="添加" Style="{StaticResource GhostButton}"
+                                    Margin="8,0,0,0" Click="AddVideoFromCombo_Click" />
+                            <TextBlock Grid.Column="2" Text="或手动输入" Style="{StaticResource ParamLabel}"
+                                       VerticalAlignment="Center" Margin="20,0,8,0" />
+                            <TextBox x:Name="VideoManualBox" Style="{StaticResource NumberBox}" Width="170"
+                                     HorizontalContentAlignment="Left" />
+                            <Button Grid.Column="4" Content="添加" Style="{StaticResource GhostButton}"
+                                    Margin="8,0,0,0" Click="AddVideoFromText_Click" />
+                        </Grid>
+                        <TextBlock Style="{StaticResource Caption}" Margin="0,10,0,0"
+                                   Text="视频程序本身也是触发源：其中任一程序输出音频时，音乐程序会被压低。" />
                     </StackPanel>
                 </Border>
 

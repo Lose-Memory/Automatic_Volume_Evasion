@@ -55,15 +55,30 @@ public sealed class AudioEngine : IDisposable
     private string? _micOwner;
 
     private DateTime _lastSessionScan = DateTime.MinValue;
+    private DateTime _lastCaptureScan = DateTime.MinValue;
     private DateTime _lastDeviceScan = DateTime.MinValue;
     private bool _deviceScanLogged;
+
+    /// <summary>Benchmark mode: evaluate triggers but never touch any volume.</summary>
+    public bool DryRun { get; set; }
+
+    
+    private long _scanCount, _captureCount;
+    private double _scanTotalMs, _scanMaxMs, _captureTotalMs, _captureMaxMs;
+
+    public string ScanStats()
+    {
+        static string Fmt(long n, double total, double max) => n == 0
+            ? "无"
+            : $"{n} 次, 平均 {total / n * 1000:0.0} µs, 最大 {max * 1000:0.0} µs, 合计 {total:0.0} ms";
+        return $"输出会话扫描: {Fmt(_scanCount, _scanTotalMs, _scanMaxMs)}；" +
+               $"采集会话扫描: {Fmt(_captureCount, _captureTotalMs, _captureMaxMs)}";
+    }
 
     private readonly TriggerState _micState = new();
     private readonly TriggerState _videoState = new();
 
-    private List<MediaSessionInfo> _mediaSessions = [];
-    private DateTime _mediaSessionsAt = DateTime.MinValue;
-
+    
     private int _testCommand;
     private DateTime _testPauseUntil = DateTime.MinValue;
 
@@ -133,11 +148,39 @@ public sealed class AudioEngine : IDisposable
         var settings = _store.Settings;
 
         EnsureDevices(now);
-        if (now - _lastSessionScan >= TimeSpan.FromSeconds(1))
+        // Output sessions are expensive to enumerate and a video signal tolerates a second of lag.
+        if ((now - _lastSessionScan).TotalMilliseconds >= 1000)
         {
+            var sw = DryRun ? System.Diagnostics.Stopwatch.StartNew() : null;
+
             ScanSessions();
-            ScanCaptureSessions(settings);
+            if (sw != null)
+            {
+                sw.Stop();
+                _scanCount++;
+                _scanTotalMs += sw.Elapsed.TotalMilliseconds;
+                _scanMaxMs = Math.Max(_scanMaxMs, sw.Elapsed.TotalMilliseconds);
+            }
+
             _lastSessionScan = now;
+        }
+
+        // Capture sessions are cheap to enumerate and the mic trigger is a binary signal, so this
+        // runs at the user's configured rate (200 ms by default) to keep the reaction snappy.
+        if ((now - _lastCaptureScan).TotalMilliseconds >= settings.ScanMsCapture)
+        {
+            var sw = DryRun ? System.Diagnostics.Stopwatch.StartNew() : null;
+
+            ScanCaptureSessions(settings);
+            if (sw != null)
+            {
+                sw.Stop();
+                _captureCount++;
+                _captureTotalMs += sw.Elapsed.TotalMilliseconds;
+                _captureMaxMs = Math.Max(_captureMaxMs, sw.Elapsed.TotalMilliseconds);
+            }
+
+            _lastCaptureScan = now;
         }
 
         ReadLevels();
@@ -152,28 +195,20 @@ public sealed class AudioEngine : IDisposable
             Log.Write($"麦克风触发: {(_micState.Active ? "开" : "关")}（占用: {_micOwner ?? "无"}）");
         if (videoWasActive != _videoState.Active) Log.Write($"视频触发: {(_videoState.Active ? "开" : "关")} ({videoDb:0} dB)");
 
-        RefreshMediaSessions(settings, now);
-
         var command = Interlocked.Exchange(ref _testCommand, 0);
         if (command == 1)
         {
             _testPauseUntil = now.AddSeconds(5);
-            _mediaSessions = MediaControl.GetSessions();
-            _mediaSessionsAt = now;
-            Log.Write("测试：暂停全部目标");
+            Log.Write("测试：暂停全部音乐目标");
 
             foreach (var target in settings.Targets)
             {
-                if (!target.Enabled) continue;
+                if (!target.Enabled || target.Category != TargetCategory.Music) continue;
                 var runtime = GetRuntime(target.Id);
                 var playing = IsPlaying(target);
                 Log.Write($"  {target.Name}: IsPlaying={playing}");
 
-                var paused = target.PauseMethod == PauseMethod.Hotkey
-                    ? playing && Pause(target)
-                    : Pause(target);
-
-                if (paused) runtime.PausedByUs = true;
+                if (playing && Pause(target)) runtime.PausedByUs = true;
                 runtime.State = "测试暂停";
             }
         }
@@ -408,13 +443,18 @@ public sealed class AudioEngine : IDisposable
         }
     }
 
+    /// <summary>Video targets double as the trigger source: any of them producing audio counts as playback.</summary>
     private float VideoLevel(AppSettings settings)
     {
         var level = 0f;
-        foreach (var key in settings.VideoSourceProcesses)
+        foreach (var target in settings.Targets)
         {
-            if (_apps.TryGetValue(Normalize(key), out var app))
-                level = MathF.Max(level, app.Level);
+            if (target.Category != TargetCategory.Video) continue;
+            foreach (var process in target.Processes)
+            {
+                if (_apps.TryGetValue(Normalize(process), out var app))
+                    level = MathF.Max(level, app.Level);
+            }
         }
         return level;
     }
@@ -533,6 +573,8 @@ public sealed class AudioEngine : IDisposable
     private void ApplyTarget(TargetSettings target, TargetRuntime runtime, AppSettings settings,
         float videoDb, float elapsedMs)
     {
+        if (DryRun) return;
+
         if (!settings.Enabled || !target.Enabled)
         {
             if (runtime.PausedByUs) Resume(target, runtime);
@@ -541,9 +583,6 @@ public sealed class AudioEngine : IDisposable
             ApplyVolume(target, 1f);
             return;
         }
-
-        var isVideoSource = target.Processes.Any(p =>
-            settings.VideoSourceProcesses.Contains(p, StringComparer.OrdinalIgnoreCase));
 
         var wantPause = false;
         var duckTo = 1f;
@@ -555,7 +594,8 @@ public sealed class AudioEngine : IDisposable
             else { ducking = true; duckTo = MathF.Min(duckTo, (float)target.OnMicDuckTo); }
         }
 
-        if (_videoState.Active && !isVideoSource && target.OnVideo != TargetAction.None)
+        // 视频类目标就是触发源本身，视频播放不压低它们。
+        if (target.Category == TargetCategory.Music && _videoState.Active && target.OnVideo != TargetAction.None)
         {
             if (target.OnVideo == TargetAction.Pause) wantPause = true;
             else { ducking = true; duckTo = MathF.Min(duckTo, (float)target.OnVideoDuckTo); }
@@ -564,12 +604,13 @@ public sealed class AudioEngine : IDisposable
         if (wantPause)
         {
             runtime.Gain = 1f;
-            if (!runtime.PausedByUs && IsPlaying(target))
+            var playing = IsPlaying(target);
+            if (!runtime.PausedByUs && playing)
             {
                 if (Pause(target)) runtime.PausedByUs = true;
             }
-            runtime.State = runtime.PausedByUs ? "已暂停" : "暂停中（未能暂停）";
-            var pauseCoarse = runtime.PausedByUs ? "已暂停" : "暂停失败";
+            runtime.State = runtime.PausedByUs ? "已暂停" : playing ? "暂停失败" : "等待播放";
+            var pauseCoarse = runtime.PausedByUs ? "已暂停" : playing ? "暂停失败" : "等待播放";
             if (pauseCoarse != runtime.Coarse)
             {
                 Log.Write($"{target.Name}: {pauseCoarse}");
@@ -804,106 +845,36 @@ public sealed class AudioEngine : IDisposable
 
     // ---- pause / resume ----
 
-    private void RefreshMediaSessions(AppSettings settings, DateTime now)
-    {
-        var needed = settings.Targets.Any(t => t.Enabled && t.PauseMethod == PauseMethod.MediaSession &&
-            (t.OnMic == TargetAction.Pause || t.OnVideo == TargetAction.Pause));
-        if (!needed)
-        {
-            _mediaSessions = [];
-            return;
-        }
-
-        if (now - _mediaSessionsAt < TimeSpan.FromMilliseconds(500)) return;
-        _mediaSessionsAt = now;
-        _mediaSessions = MediaControl.GetSessions();
-    }
-
-    private MediaSessionInfo? FindMediaSession(TargetSettings target)
-    {
-        foreach (var session in _mediaSessions)
-        {
-            if (target.MediaSessionPrefixes.Length == 0) continue;
-            foreach (var prefix in target.MediaSessionPrefixes)
-            {
-                if (!string.IsNullOrEmpty(prefix) &&
-                    session.Aumid.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                    return session;
-            }
-        }
-        return null;
-    }
-
+    /// <summary>A player keeps its session "active" for a while after pausing, so trust the meter.</summary>
     private bool IsPlaying(TargetSettings target)
     {
-        if (target.PauseMethod == PauseMethod.Hotkey)
+        foreach (var process in target.Processes)
         {
-            // Session state stays "active" for a while after a player pauses, so trust the meter.
-            foreach (var process in target.Processes)
-            {
-                if (_apps.TryGetValue(Normalize(process), out var app) && app.Level > 0.003f)
-                    return true;
-            }
-            return false;
+            if (_apps.TryGetValue(Normalize(process), out var app) && app.Level > 0.003f)
+                return true;
         }
-
-        return FindMediaSession(target)?.Playing == true;
+        return false;
     }
 
     private bool Pause(TargetSettings target)
     {
-        if (target.PauseMethod == PauseMethod.Hotkey)
-        {
-            Log.Write($"{target.Name}: 发送暂停热键 {_store.Settings.KuGouPauseHotkey}");
-            return MediaControl.SendHotkey(_store.Settings.KuGouPauseHotkey);
-        }
-
-        _mediaSessions = MediaControl.GetSessions();
-        _mediaSessionsAt = DateTime.UtcNow;
-
-        var session = FindMediaSession(target);
-        if (session == null)
-        {
-            Log.Write($"{target.Name}: 未找到媒体会话");
-            return false;
-        }
-
-        var ok = MediaControl.Pause(session);
-        Log.Write($"{target.Name}: 暂停媒体会话 {session.Aumid} -> {ok}");
-        return ok;
+        Log.Write($"{target.Name}: 发送暂停热键 {target.PauseHotkey}");
+        return MediaControl.SendHotkey(target.PauseHotkey);
     }
 
     private void Resume(TargetSettings target, TargetRuntime runtime)
     {
         runtime.PausedByUs = false;
 
-        if (target.PauseMethod == PauseMethod.Hotkey)
-        {
-            // The hotkey is a toggle: only send it while the app is actually paused.
-            if (IsPlaying(target))
-            {
-                Log.Write($"{target.Name}: 已在播放，跳过恢复");
-                return;
-            }
-
-            Log.Write($"{target.Name}: 发送恢复热键");
-            MediaControl.SendHotkey(_store.Settings.KuGouPauseHotkey);
-            return;
-        }
-
-        _mediaSessions = MediaControl.GetSessions();
-        _mediaSessionsAt = DateTime.UtcNow;
-
-        var session = FindMediaSession(target);
-        if (session == null) return;
-        if (session.Playing)
+        // The hotkey is a toggle: only send it while the app is actually paused.
+        if (IsPlaying(target))
         {
             Log.Write($"{target.Name}: 已在播放，跳过恢复");
             return;
         }
 
-        var ok = MediaControl.Play(session);
-        Log.Write($"{target.Name}: 恢复媒体会话 -> {ok}");
+        Log.Write($"{target.Name}: 发送恢复热键");
+        MediaControl.SendHotkey(target.PauseHotkey);
     }
 
     // ---- snapshot ----

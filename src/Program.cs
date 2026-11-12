@@ -27,6 +27,12 @@ internal static class Program
             return;
         }
 
+        if (args.Contains("--bench-scan", StringComparer.OrdinalIgnoreCase))
+        {
+            RunScanBench(args);
+            return;
+        }
+
         _mutex = new Mutex(true, @"Local\AutoVolume.SingleInstance", out var created);
         if (!created)
         {
@@ -67,7 +73,50 @@ internal static class Program
         }
     }
 
-    private static void RunDump()
+    /// <summary>
+/// Dev-only benchmark: runs the engine for N seconds without touching any volume and logs
+/// per-scan timings. Usage: --bench-scan [--bench-seconds 60] [--bench-interval 200]
+/// </summary>
+private static void RunScanBench(string[] args)
+{
+    var seconds = 60;
+    var interval = 1000;
+    for (var i = 0; i < args.Length - 1; i++)
+    {
+        if (args[i].Equals("--bench-seconds", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(args[i + 1], out var s)) seconds = Math.Clamp(s, 5, 600);
+        if (args[i].Equals("--bench-interval", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(args[i + 1], out var ms)) interval = Math.Clamp(ms, 50, 10000);
+    }
+
+    var store = new SettingsStore();
+    store.Settings.ScanMsCapture = interval;
+    var engine = new AudioEngine(store) { DryRun = true };
+    var proc = System.Diagnostics.Process.GetCurrentProcess();
+
+    try
+    {
+        var cpu0 = proc.TotalProcessorTime;
+        var wall = System.Diagnostics.Stopwatch.StartNew();
+        engine.Start();
+        Thread.Sleep(seconds * 1000);
+        wall.Stop();
+        proc.Refresh();
+        var cpu = proc.TotalProcessorTime - cpu0;
+
+        Log.Write($"=== 扫描基准 interval={interval}ms duration={seconds}s ===");
+        Log.Write($"进程 CPU: {cpu.TotalMilliseconds:0.0} ms / {wall.Elapsed.TotalSeconds:0.0} s " +
+                  $"= {cpu.TotalMilliseconds / wall.Elapsed.TotalMilliseconds * 100:0.00}% 单核");
+        Log.Write(engine.ScanStats());
+    }
+    finally
+    {
+        engine.Stop();
+        store.Dispose();
+    }
+}
+
+private static void RunDump()
     {
         var store = new SettingsStore();
         var engine = new AudioEngine(store);
