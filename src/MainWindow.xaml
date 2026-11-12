@@ -231,9 +231,7 @@
                             <Button Grid.Column="4" Content="添加" Style="{StaticResource GhostButton}"
                                     Margin="8,0,0,0" Click="AddVideoFromText_Click" />
                         </Grid>
-                        <TextBlock Style="{StaticResource Caption}" Margin="0,10,0,0"
-                                   Text="视频程序本身也是触发源：其中任一程序输出音频时，音乐程序会被压低。" />
-                    </StackPanel>
+                        </StackPanel>
                 </Border>
 
                 <Grid Margin="0,0,0,10">

@@ -194,6 +194,10 @@ dotnet publish src/AutoVolume.csproj -c Release -r win-x64 `
 
 ## 更新日志
 
+### v1.5.3
+
+- 移除视频程序面板底部的说明文字
+
 ### v1.5.2
 
 - 统一行内控件高度为 30px，动作下拉与压低百分比之间留出间距，不再挤在一起
